@@ -1,0 +1,12 @@
+//CBTDOWN JOB CBTDOWN,'CBT',REGION=0M,NOTIFY=&SYSUID
+//OUT      OUTPUT DEFAULT=YES,JESDS=ALL,OUTDISP=(HOLD,HOLD)
+//* ------------------------------------------------------ *
+//* JCL TO EXECUTE THE CBTDOWN EXEC TO DOWNLOAD ALL OF THE *
+//* CBTTAPE.ORG FILES.                                     *
+//* ------------------------------------------------------ *
+//CBTDOWN  EXEC PGM=IKJEFT1B,DYNAMNBR=50,
+//    PARM='%CBTDOWN HLQ'    <==== CHANGE
+//SYSEXEC  DD  DISP=SHR,DSN=HLQ.FILEIDX.PDS  <==== CHANGE
+//SYSTSPRT DD  SYSOUT=*
+//SYSTSIN  DD  DUMMY
+/*

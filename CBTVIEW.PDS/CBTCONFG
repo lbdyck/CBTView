@@ -1,0 +1,43 @@
+* The Official CBT ISPF Application Site Customization File
+*
+* An * in column 1 is a comment
+*
+* Uncomment and change the values for the defaults you want
+* to override.
+*
+*action = The default action for the S selection
+*         B ISPF Browse
+*         E ISPF Edit
+*         I Display the FILEnnnn member in the FILEIDX.PDS
+*         P PDS command (CBT File 182)
+*         V ISPF View
+*         R Review (CBT File 134)
+*
+*action = I
+*
+*update = 0 for not allowed
+*         1 for allowed
+*
+*update = 0
+*
+*sysout = a sysout class with Copies(0)
+*
+*sysout = Z
+*
+*
+*pds    = 0 PDS command not available
+*       = 1 PDS command is available
+*
+*pds = 1
+*
+*
+* review = 0 Review command not available
+*        = 1 Review command is available
+*
+*review = 1
+*
+*
+* volser = xxxxxx (volume serial for cbt datasets)
+*          leave commented out to allow SMS to position
+*
+*volser = CBT006

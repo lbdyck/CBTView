@@ -1,0 +1,13 @@
+)attr
+ _ type(input ) hilite(uscore)
+)Body Window(67,6)
++Enter/Verify the FILEIDX.PDS dataset name:
++
++FILEIDX.PDS dataset name:_fileidx                                +
++
++or%F3+to cancel.
++
+)Init
+)Proc
+ ver(&fileidx,nb,dsname)
+)End

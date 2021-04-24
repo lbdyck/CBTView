@@ -1,0 +1,39 @@
+//***FILE 043 is from Lionel Dyck and contains an exec called       *   FILE 043
+//*           CBT, which provides easy access to all CBT Tape       *   FILE 043
+//*           files, provided they are cataloged on your system     *   FILE 043
+//*           and on disk, and their dataset names have a           *   FILE 043
+//*           consistent format.  If a CBT Tape file is not on      *   FILE 043
+//*           your local DASD, the dialog provides an option        *   FILE 043
+//*           to download the file from the CBTtape.org site to     *   FILE 043
+//*           your local DASD.                                      *   FILE 043
+//*                                                                 *   FILE 043
+//*           email:  lbdyck@gmail.com                              *   FILE 043
+//*                                                                 *   FILE 043
+//*       CBT Tape FILE001 is required for this application to      *   FILE 043
+//*       run, but if it isn't available, the application will      *   FILE 043
+//*       attempt to FTP the file to your local DASD for use.       *   FILE 043
+//*       This is then used to build an index of all files          *   FILE 043
+//*       for quick access, allowing the user to determine if       *   FILE 043
+//*       they want to download the specific file.                  *   FILE 043
+//*                                                                 *   FILE 043
+//*       An option is also provided to check for file updates      *   FILE 043
+//*       and then to download the updated files.                   *   FILE 043
+//*                                                                 *   FILE 043
+//*       Note: This is another option:                             *   FILE 043
+//*       By downloading the tersed backup files of the disk        *   FILE 043
+//*       CBTA01 from the CBT website www.cbttape.org               *   FILE 043
+//*                                                                 *   FILE 043
+//*       NAME       VER.MOD   LAST MODIFIED     SIZE   ID          *   FILE 043
+//*       $$$#DATE    05.02   2021/04/16 16:42     12 CBT           *   FILE 043
+//*       $$README    01.52   2021/04/24 06:14    280 CBT           *   FILE 043
+//*       $INSTALL    01.27   2021/04/19 08:44     96 CBT           *   FILE 043
+//*       $INSTALP    01.01   2021/04/18 10:05     13 CBT           *   FILE 043
+//*       @FILE043    01.20   2021/04/24 06:15     38 CBT           *   FILE 043
+//*       CBT         01.41   2021/04/24 11:37   2766 CBT           *   FILE 043
+//*       CBTCONFG    01.09   2021/04/13 12:35     43 CBT           *   FILE 043
+//*       CBTDOWN     01.06   2021/04/11 03:06    261 CBT           *   FILE 043
+//*       CBTDOWNJ    01.00   2021/04/10 10:58     12 CBT           *   FILE 043
+//*       CBTVIEW     01.05   2021/04/06 13:53     25 CBT           *   FILE 043
+//*       UNZIP                                                     *   FILE 043
+//*       UNZIPL      01.00   2021/04/07 03:33    761 CBT           *   FILE 043
+//*                                                                 *   FILE 043

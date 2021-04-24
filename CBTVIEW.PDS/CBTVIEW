@@ -1,0 +1,25 @@
+/* -------------------- REXX ---------------------------- *
+ | Customize the dataset name and then copy this exec     |
+ | into a library in your standard TSO CLIST or EXEC      |
+ | allocation library.                                    |
+ |                                                        |
+ | Note 1:                                                |
+ | Syntax is: %cbtview file action \ hlq                  |
+ |                                                        |
+ | Note 2:                                                |
+ | Dynamically add to the ISPF command table using this:  |
+ |                                                        |
+ |  "%ispfcmds * cbt      3 select cmd(%cbtview &zparm)"  |
+ |                                                        |
+ |  or (if ISPFCMDS is not installed) add to the ISPF     |
+ |     command table with these values:                   |
+ |                                                        |
+ |     Verb:    CBT                                       |
+ |     Trunc:   3                                         |
+ |     Action:  Select cmd(%cbtview &zparm)               |
+ |     Desc:    Fast access to a individual CBT dataset   |
+ * ------------------------------------------------------ */
+  arg opt
+  "altlib act app(exec) ds('CBT.V501.fileidx.pds')"
+  '%cbt' opt
+  'altlib deact app(exec)'

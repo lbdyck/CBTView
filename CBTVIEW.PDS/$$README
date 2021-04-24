@@ -1,0 +1,280 @@
+Congratulations - you have found CBTTape File043 - THE place to start.
+
+================================================================================
+OVERVIEW
+
+This is an ISPF application that provides quick, and easy, access to the
+contents of the CBTTAPE 'tape', updates, and overflow, directly from your
+z/OS TSO/ISPF session.
+
+This application requires that FILE001 be available. If it isn't, and FTP
+is enabled, then it will be downloaded (see Dynamic download below). Then
+the file will be processed to generate an index member (1-line description
+for each CBT file), and a separate member for each CBT file with the full
+file description/summary.
+
+This is accomplished in one of two ways.
+
+   - Bulk download
+     * Download the ADRDSSU, FDR, or AWSTAPE, formats
+     * This is for sites that do not have FTP access to the
+       www.cbttape.org site
+
+   - Dynamic download
+     * Using this application, when a file is referenced that has not been
+       downloaded, then it will be downloaded. If an update is available
+       then the update will be downloaded
+     * The download consists of:
+       - downloading the zip file to the USS /tmp filesystem
+       - unzip'ing the zip file
+       - performing a binary upload of the resulting file
+       - removing the zip file, and the unzip'd file, to clean up
+       - performing a TSO RECEIVE if the unzip'd file is in TSO Transmit
+         format
+       - Updating the summary information about the file
+
+
+The CBTTAPE is a collection of files (over 1,000 tools) for use with
+z/OS.  These tools are all open-source and have been contributed to the
+'tape' since 1975. Today the CBTTAPE is a website where all of the files
+are available for access.  Its address is www.cbttape.org .
+
+There are two 'tapes' in the CBTTAPE collection.
+
+    - The current 'tape' that is accessed from the CBT link on the left
+      of the webpage.
+      - The updates page contains contributions to the 'tape' that
+        arrived after the 'tape' was generated.
+    - The overflow 'tape' is available via the Overflow link on the left
+      of the webpage. These files are older and may not work with current
+	     versions of z/OS. They are included here for reference. See File 001
+	     on the Overflow site for details.
+
+There is no set time, when a new "version" of the CBT Tape is cut.  When
+a new version IS cut, then all the updates since the last version, are
+merged into it, and a new "tape" is created.
+
+When a new version of the CBT Tape is cut, it is as if a completely new
+"tape" has been generated, with all the updated files merged in.
+
+After that point, a new set of Updates is generated, to prepare for the
+next "tape" version.
+
+================================================================================
+INSTALLATION
+================================================================================
+
+To Install this application copy the PDS into a new dataset with the
+dataset name of hlq.FILEIDX.PDS. Where hlq is the high-level-qualifer
+that will host all the CBTTape Datasets.
+
+  Automated Installation
+  Execute the $INSTALL member of this PDS to:
+     1. Allocate the hlq.FILEIDX.PDS
+     2. Copy the members from this PDS to FILEIDX.PDS
+     3. Edit the CBTCONFG member
+     4. Update the CBTVIEW member (exec) to reference the new
+        hlq.FILEIDX.PDS dataset
+
+  Manual Installation
+  It is recommended that the PDS be a PDSE as it will be updated with one
+  member for each CBT file and then periodically updated - with a PDSE you
+  won't have to compress it.
+
+      A recommended allocation is:
+      RECFM=FB,LRECL=80,BLKSIZE=32720,SPACE=(TRK,(150,90,52))
+
+Be SURE to edit the CBTCONFG member and review the site customization
+settings. This is important if your site does not have the PDS and/or
+the REVIEW commands. Also CRITICAL if your site does NOT allow FTP from
+your z/OS system (change update to 0).
+
+--------------------------------------------------------------------------------
+PRE-REQUISITES
+--------------------------------------------------------------------------------
+This application has the following requirements:
+
+   - Selection P requires the PDS command from FILE 182
+   - Selection R requires the REVIEW command from FILE 182 or 134
+
+   - FTP must be enabled to access the WWW.CBTTAPE.ORG site
+     * may require opening your firewall if that is allowed
+
+================================================================================
+Installation Tasks
+================================================================================
+
+Download www.cbttape.org/ftp/cbt/CBT001.zip from the CBTTape web site.
+unzip,  and upload in binary to a z/OS sequential dataset
+(RECFM=FB,LRECL=80) named hlq.FILE001.DATA.
+
+      NOTE:
+      If this has not been done prior to starting this application
+      then it will be attempted when this application starts, provided
+      that FTP is allowed.
+
+Then copy the CBTVIEW member to a dataset in your SYSPROC or SYSEXEC
+library and update to reference the hlq.FILEIDX.PDS dataset. This will
+be done automatically if using the $INSTALL exec.
+
+Execute the CBTVIEW exec to setup the ALTLIB environment and then execute
+the CBT exec in this library.  It will create the CBTINDEX member and then
+display a table with a list of ALL of the CBTTape files.
+
+Note:
+
+After the dialog table is displayed, the DATE header field initially
+contains the version number of the CBTTape. To the left of the DATE
+field, there can be two indicators displayed.
+
+   1. An "*" indicator will be displayed after the CBT file has
+      been downloaded to your z/OS system and is available as a
+      local dataset.
+   2. A "+" sign will will be displayed if there is an update available
+      for the CBT file on the website and the DATE field will contain
+      the date of the updated file. After an update is downloaded, the
+      summary file, hlq.FILEIDX.PDS(FILEnnnn), will be updated with the
+      new @FILEnnn (or @FILnnnn) from the newly downloaded file.
+
+================================================================================
+USAGE
+================================================================================
+
+This application will display a selectable table of all CBT files with
+the following options:
+
+Commands:
+    DS   (DS)    Display all the CBT datasets online
+                 - DS
+    Find (F)     Find a string in the description fields
+                 - F str
+    History (H)  Display a change history for the command
+                 - H
+    Info (I)     Display information about the CBT Application
+                 - I
+    Locate (L)   Locate a file number
+                 - L 312
+    New  (NE)    Limit the table to those files with an update date
+                 - NE
+    Only (O)     Limit the table to those records with the string
+                 - O str
+    Refresh (R)  Refresh the table (useful after using Only or Search)
+                 - R
+    REBuild (REB) Create or Recreate the CBTINDEX member
+                 - REB
+    Search (S)   Use SuperC to search all of the file description
+                 members and then limit the table to those files.
+    Site (SI)    Display only the files that have been downloaded and
+                 are available on your local system
+    Update (UPD) Check the CBTTAPE.ORG updates directory for updated
+                 files since the date of the last update and then
+                 download them, update the CBTINDEX and the FILEnnnn
+                 members.
+                 - Add any non-blank after the UPDate (e.g. UPD X) to
+                   ignore the date of the last update check.
+    CUrrent (CU) Work with the CBT production files *Default
+    OVerflow (OV) Work with the CBT Overflow files
+    /            - Display a popup menu
+
+File Selections:
+     S           Select the file and perform the default action
+                 - default action is a setting in the CBT exec
+     B           Browse the file
+     C           Copy the dataset
+     E           Edit the file
+     I           Browse the file description member
+     P           Open the file using the PDS command
+     R           Open the file using the Review command
+     U           Update the file with a fresh download
+     V           Browse the file
+     /           Display a popup selection menu
+
+In the displayed table an * indicates that the file is available on the
+local system. And a + indicates that there is an update available for
+the file.
+
+If a file has not been downloaded to your local system that the user is
+prompted to allow this application to FTP the file from WWW.CBTTAPE.ORG,
+unzip and then RECEIVE it into a dataset that can be accessed locally.
+This will happen for all selections other than I.
+
+When attempting to download a file, if an update exists then it will be
+downloaded.
+
+The FTP process utilizes the /tmp filesystem on your z/OS system for the
+file work area. The FTP process is:
+
+   1. Installs the unzip command from the FILEIDX.PDS(unzip) into /tmp
+      for use after the zip file is downloaded from WWW.CBTTAPE.ORG.
+      * this file is shipped in pax format and it automatically
+      * extracted when copied to /tmp
+   2. Creates a temporary file in /tmp with the FTP instructions
+   3. Invokes the FTP OMVS command piping the temp file into FTP
+   4. Unzip's the downloaded CBTnnnn.zip file.
+   5. Performs an OGET of the resulting XMI or DATA file to z/OS
+      in binary
+   6. If the file was a XMI then perform a TSO RECEIVE
+   7. Remove the files from /tmp except for unzip
+
+================================================================================
+NOTES
+
+   1. If updates are enabled (update = 1 in CBTCONFG) then each time the
+      dialog starts it verifies that FTP is available. If it isn't then
+      it could take a minute or two to timeout at which point a message
+      it generated and FTP is disabled for the session. If this happens
+      verify that ftp to www.cbttape.org works and if it doesn't then
+      change the CBTCONFG update setting to 0 until resolved.
+	
+   2. A check is made to verify that the pax extract of the unzip utility
+      was successful. The only times it will fail is if the UNZIP member
+      is corrupt - which can happen if the PDS was not transferred
+      properly to allow the UNZIP to transfer in mode b and type e.
+
+================================================================================
+
+This PDS contains the file summary members for every PDS on the CBTTape along
+with the following special members:
+
+$$README   What you are reading.
+$INSTALL   REXX Installation Dialog to allocate the hlq.FILEIDX.PDS
+           and then copy the key members from this PDS to it
+$INSTALP   ISPF Panel used by $INSTALL
+CBT        The CBTTape ISPF Application - try it - you'll like it.
+CBTCONFG   Site customization data for the CBT ISPF Application.
+CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL of the CBT
+           files (File 001 is excluded as it should already be
+           downloaded as it is used to create CBTINDEX).
+CBTDOWNJ   Sample JCL to run CBTDOWN.
+CBTVIEW    Copy this into a CLIST or EXEC library in your normal
+           TSO library allocations and then tailor it to reference
+           this PDS.
+CBTINDEX   A one-line summary of every file on the CBTTape that is used
+           by the CBT exec as an index. This is created by by the CBT exec.
+           This member is a pre-req for the use of CBTDOWN
+UNZIP      The OMVS port of unzip. It is used when you request a CBT File
+           that is not on your system under the same HLQ as this dataset.
+           Note: this member is in PAX format and will be copied and then
+           extracted into /tmp when required.
+UNZIPL     Unzip License
+ZDATE      Created and updated with each UPDATE command. Initially does
+           not exist.
+
+If the CBTVIEW command is installed in a library in your CLIST or EXEC
+allocation library then you can also add it to the ISPF command table
+using these values:
+
+    Verb:    CBT
+    Trunc:   3
+    Action:  Select cmd(%cbtview &zparm)
+    Desc:    The CBT ISPF Application
+
+================================================================================
+
+This ISPF application is dedicated to all those who have, and will,
+contribute to the mainframe community via this site.
+
+Comments/suggestions/etc. to fix, or improve, this application should be
+directed to Lionel Dyck at lbdyck@gmail.com - complaints welcome as well (but
+please be kind and constructive).
+
