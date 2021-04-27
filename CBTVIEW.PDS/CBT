@@ -600,7 +600,6 @@ Do_ZCMD:
   | Do Browse/Edit/View |
   * ------------------- */
 BEV:
-trace '?i'
   arg defact
   if sysdsorg = 'PS' then do
      defact "dataset('"dsn"')"
