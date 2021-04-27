@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.15'
+  ver = '1.17'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,10 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-04-27 LBD 1.17                                  |
+  |                     Use MEMLIST instead of B/E/V          |
+  |      2021-04-26 LBD 1.16                                  |
+  |                     Fix tbend incorrect call  (random)    |
   |      2021-04-24 LBD 1.15                                  |
   |                     Fix tbend not found issue (random)    |
   |      2021-04-23 LBD 1.14                                  |
@@ -357,8 +361,10 @@ Done:
   call Remove_Rfind
   if load_info = null then exit 0
   else x = dropispf(load_info)
-  if tab_open = 1 then
+  if tab_open = 1 then do
   'tbend' cbtdd
+  tab_open = 0
+  end
   exit 0
 
   /* ---------------------- *
@@ -444,11 +450,9 @@ Do_Select:
   end
   Address ISPExec
   Select
-    When csel = 'B' then
-    "Browse Dataset('"dsn"')"
+    When csel = 'B' then call BEV 'BROWSE'
     When csel = 'C' then call do_copy
-    When csel = 'E' then
-    "Edit   Dataset('"dsn"')"
+    When csel = 'E' then call BEV 'EDIT'
     When csel = 'R' then do
       if review = 1 then
       "Select cmd(Review '"dsn"')"
@@ -479,8 +483,7 @@ Do_Select:
         'setmsg msg(isrz003)'
       end
     end
-    When csel = 'V' then
-    "View   Dataset('"dsn"')"
+    When csel = 'V' then call BEV 'VIEW'
     When csel = 'P' then do
       if pds = 1
       then "Select cmd(pds '"dsn"')"
@@ -593,13 +596,30 @@ Do_ZCMD:
   csel = null
   return
 
+  /* ------------------- *
+  | Do Browse/Edit/View |
+  * ------------------- */
+BEV:
+trace '?i'
+  arg defact
+  if sysdsorg = 'PS' then do
+     defact "dataset('"dsn"')"
+     end
+  "lminit dataid(act) dataset('"dsn"')"
+  'Memlist dataid('act') Default('left(defact,1)') field(9)'
+  'lmfree dataid('act')'
+  return
+
+  /* ------------------ *
+  | Display About Info |
+  * ------------------ */
 Do_About:
   zcmd = null
   zerrsm = null
   zerrlm = left('CBTTape® 'ver,73) ,
-           left('Lionel B. Dyck',73) ,
-           left('with John Kalinich',73) ,
-           left('Copyleft - GNU GPL V3',73)
+    left('Lionel B. Dyck',73) ,
+    left('with John Kalinich',73) ,
+    left('Copyleft - GNU GPL V3',73)
   'Setmsg msg(isrz003)'
   return
 
@@ -1284,7 +1304,10 @@ Do_Overflow:
   idxmem   = 'COVINDEX'
   cbttype  = 'Overflow'
   title    = cbttype
+  if tab_open = 1 then do
   'tbend' cbtdd
+  tab_open = 0
+  end
   parse value '' with update_files cbt_online
   drop updates. idx_file.
   call do_index
@@ -1306,7 +1329,10 @@ Do_CBT:
   idxmem   = 'CBTINDEX'
   cbttype  = null
   title    = 'Official'
+  if tab_open = 1 then do
   'tbend' cbtdd
+  tab_open = 0
+  end
   parse value '' with update_files cbt_online
   drop updates. idx_file.
   call do_index
@@ -1318,7 +1344,10 @@ Do_CBT:
 Do_Refresh:
   arg doropt
   if doropt = null then
+  if tab_open = 1 then do
   'tbend' cbtdd
+  tab_open = 0
+  end
   call do_index
   zerrsm = 'Refreshed'
   zerrlm = 'Refresh completed and all CBT Index entries are' ,
@@ -1612,7 +1641,10 @@ Do_Popup:
   | useful with the CBTINDEX rebuilt.                |
   * ------------------------------------------------ */
 Build_Index:
-  if tab_open = 1 then Address ISPExec 'tbend' cbtdd
+  if tab_open = 1 then do
+  Address ISPExec 'tbend' cbtdd
+  tab_open = 0
+  end
   x = listdsi("'"cbthlq"."file_pfx"001.DATA'")
   if x > 0 then do
     if update = 1 then do

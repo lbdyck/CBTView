@@ -82,15 +82,15 @@
   'Free f('ddo')'
 
   Address ISPExec
-  Address ISPExec
   "LMINIT DATAID(ddo) DATASET("fileidx")"
   "LMOPEN DATAID("ddo") OPTION(INPUT)"
   'LMMSTATS DATAID('ddo') MEMBER(CBTVIEW)'
-  "LMClose Dataid("ddo")"
-  "LMFree  Dataid("ddo")"
   zerrsm = ''
   zerrlm = fileidx 'has been allocated and the Official CBT' ,
     'ISPF Dialog has been copied into it. The CBTVIEW member has' ,
     'been updated and is ready to place into your SYSEXEC or SYSPROC' ,
     'set of libraries.'
   'setmsg msg(isrz002)'
+  'Memlist dataid('ddo') Default(E) field(9)'
+  "LMClose Dataid("ddo")"
+  "LMFree  Dataid("ddo")"
