@@ -601,8 +601,10 @@ Do_ZCMD:
   * ------------------- */
 BEV:
   arg defact
+  x = listdsi("'"dsn"'")
   if sysdsorg = 'PS' then do
      defact "dataset('"dsn"')"
+     return
      end
   "lminit dataid(act) dataset('"dsn"')"
   'Memlist dataid('act') Default('left(defact,1)') field(9)'
