@@ -33,7 +33,6 @@ This is accomplished in one of two ways.
          format
        - Updating the summary information about the file
 
-
 The CBTTAPE is a collection of files (over 1,000 tools) for use with
 z/OS.  These tools are all open-source and have been contributed to the
 'tape' since 1975. Today the CBTTAPE is a website where all of the files
@@ -47,8 +46,8 @@ There are two 'tapes' in the CBTTAPE collection.
         arrived after the 'tape' was generated.
     - The overflow 'tape' is available via the Overflow link on the left
       of the webpage. These files are older and may not work with current
-	     versions of z/OS. They are included here for reference. See File 001
-	     on the Overflow site for details.
+      versions of z/OS. They are included here for reference. See File 001
+      on the Overflow site for details.
 
 There is no set time, when a new "version" of the CBT Tape is cut.  When
 a new version IS cut, then all the updates since the last version, are
@@ -162,8 +161,13 @@ Commands:
                  - R
     REBuild (REB) Create or Recreate the CBTINDEX member
                  - REB
+    ESearch (ES) Invoke CBTSRCH dialog from Willy Jensen for an
+                 enhanced search experience.
     Search (S)   Use SuperC to search all of the file description
                  members and then limit the table to those files.
+                 - when the individual file is then selected using
+                   S or I then a find for the string will be done
+                   (assumes that S is mapped to I).
     Site (SI)    Display only the files that have been downloaded and
                  are available on your local system
     Update (UPD) Check the CBTTAPE.ORG updates directory for updated
@@ -225,7 +229,7 @@ NOTES
       it generated and FTP is disabled for the session. If this happens
       verify that ftp to www.cbttape.org works and if it doesn't then
       change the CBTCONFG update setting to 0 until resolved.
-	
+
    2. A check is made to verify that the pax extract of the unzip utility
       was successful. The only times it will fail is if the UNZIP member
       is corrupt - which can happen if the PDS was not transferred
@@ -242,10 +246,12 @@ $INSTALL   REXX Installation Dialog to allocate the hlq.FILEIDX.PDS
 $INSTALP   ISPF Panel used by $INSTALL
 CBT        The CBTTape ISPF Application - try it - you'll like it.
 CBTCONFG   Site customization data for the CBT ISPF Application.
-CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL of the CBT
-           files (File 001 is excluded as it should already be
+CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL, or a single file
+           of the CBT files (File 001 is excluded as it should already be
            downloaded as it is used to create CBTINDEX).
 CBTDOWNJ   Sample JCL to run CBTDOWN.
+CBTSRCH    Enhanced Search dialog by Willy Jensen
+CBTSRCH$   Installation and use instructions for CBTSRCH
 CBTVIEW    Copy this into a CLIST or EXEC library in your normal
            TSO library allocations and then tailor it to reference
            this PDS.
@@ -268,6 +274,19 @@ using these values:
     Trunc:   3
     Action:  Select cmd(%cbtview &zparm)
     Desc:    The CBT ISPF Application
+
+================================================================================
+Using CBTDOWN
+
+CBTDOWN may be used to download all of the CBT Files, or just a single file.
+Sample JCL is provided in CBTDOWNJ for processing all of the CBT files (as
+you probably don't want to lock your ISPF session for this to complete).
+
+The syntax is:
+
+    To download all:   %cbtdown hlq
+    To download 1:     %cbtdown hlq file
+    To download 1 update:  %cbtdown hlq file U
 
 ================================================================================
 

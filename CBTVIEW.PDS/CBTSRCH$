@@ -1,0 +1,63 @@
+README for CBTSRCH
+
+General information
+
+ This is a companion program for CBT(VIEW).
+
+ CBTSRCH focuses on the search-and display. It loads the CBT file 1
+ into storage and creates 2 internal copies at every invocation, so it
+ is rather heavy on resources when initializing.
+
+ Highlights
+ - Do an extended search of the the CBT file 1, using boolean AND or
+   OR operators and even group comparators by paranthesis.
+ - List the file description directly, use FIND and RFIND to scroll
+   through the description(s).
+ - Access the available CBT datasets (datasets which have been
+   downloaded to your system) directly.
+ - Download datasets from the CBT website to your system (requires
+   that the CBT program is available).
+ - Switch to the CBT(VIEW) program by Lionel B Dyck for enhanced file
+   handling.
+
+ Start the program and hit the HELP key to get an explanation of all
+ the features.
+
+CBTSRCH parameters
+
+ Parameters are case insensitive.
+
+ CBTHLQ(hlq)    required, no default.
+ CBTSUF(suf)    default = 'DATA PDS'
+
+ Explanation
+  If the CBT datasets are named A.CBT.FILEnnnn.CNTL then hlq='A.CBT'
+  and suf='CNTL'.
+  If the CBT datasets are named A.CBT.FILEnnnn.CNTL and A.CBTnnnn.DATA
+  then hlq='A.CBT' and suf='CNTL DATA'.
+  Notes
+  - the qualifier containing the CBT number must begin with 'FILE'.
+  - the width of the number nnnn is determined by the program, but
+    there must be a dot (.) immediately following the number in the
+    actual datasetname.
+  - CBT file 1 is expected to be named cbthlq.FILEnn1.DATA.
+
+
+CBTSRCH sample call
+
+ cc=CBTSRCH('cbthlq(a.cbt) suf(data cntl)')
+
+
+INSTALL for CBTSRCH
+
+Recommendations
+
+ Do not modify CBTSRCH, rather create a driver REXX like this:
+
+  cc=CbtSrch('cbthlq(A.CBT)')
+
+  Use the ALTLIB command if CBTSRCH is not in the REXX/CLIST search
+  concatenation.
+
+  CBTSRCH should be installed into the same library as CBT(VIEW) by
+  Lionel B Dyck, view the installation notes for CBT(VIEW) carefully.

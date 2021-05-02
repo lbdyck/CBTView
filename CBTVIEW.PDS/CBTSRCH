@@ -1,0 +1,953 @@
+/*                                                                         rexx
+
+ (Another) Frontend to the CBT datasets.
+ Search the FILE0001 dataset, select dataset to open.
+ Start the dialog and try a search.
+
+ Other resources
+  panels CBTSEA#L, CBTSEA#H
+  program PIPE (optional, detected)
+
+ Configuration steps
+  Modify the CBTHLQ and CBTSUF variables as follows:
+   If the CBT datasets are named A.CBT.FILEnnnn.CNTL then cbthlq='A.CBT'
+   and cbtsuf='CNTL'.
+   If the CBT datasets are named A.CBT.FILEnnnn.CNTL and A.CBTnnnn.DATA
+   then cbthlq='A.CBT' and cbtsuf='CNTL DATA'.
+   Notes
+   - the qualifier containing the CBT number must begin with 'FILE'.
+   - the width of the number nnnn is determined by the program, but
+     there must be a dot (.) immediately following the number in the
+     actual datasetname.
+   - Fetching from the CBT site will download using dataset as follows:
+      cbthlq.FILEnnnn.DATA if sequential
+      cbthlq.FILEnnnn.PDS if partitioned
+
+ Build history
+  001 2021-04-08  Initial
+  002 2021-04-13  Imbed panels in pgm.
+  003 2021-04-19  Fix issue with RFIND pfk.
+  004 2021-04-30  New command SL - combined SEARCH and LIST
+                  New command F - fetch/FTPGET
+                  New command List ALL - list all headers
+                  Linecommand L is now a toggle.
+                  Handle altered RFIND pfk when calling external pgms.
+                  Initial display updated.
+                  Use memberlist instead of view to access dataset.
+                  Fix refresh after fetch.
+  005 2021-05-01  Improvement for Update file detection (LBD)
+                  Add msg for successful fetch.
+  006 2021-05-02  Fix wrong handling of lines starting with 'FILE'.
+                  Handle view of sequential dataset.
+                  Retain line command in case of error.
+                  New command List AVailable.
+                  Fix RFIND pfk issue
+
+ Created by Willy Jensen
+  email: willy@harders-jensen.com
+  web:   https://harders-jensen.com
+
+*/
+ cbtsver='006.5 2021-05-02'
+ /* handle parameters */
+ arg p
+ parse value ' 'p  with p1 'CBTHLQ(' cbthlq ')' p2
+ parse value p1 p2 with p1 'CBTSUF(' cbtsuf ')' p2
+ parse value p1 p2 with p1 'TEST(' test ')' p2
+ if p1 p2<>'' then exit xmsg('Invalid parm:' space(p1 p2))
+
+ /* global definitions */
+ if cbthlq = '' then cbthlq='CBT.V501'
+ if cbtsuf = '' then cbtsuf='PDS DATA'
+ upper cbthlq cbtsuf                      /* just in case                    */
+ $trace=0
+ pipe=0
+ parse value '' with ddlist sysindd sysprtdd wrklibdd rfindpfk rfindpfs,
+       filesupd
+
+ /* get started */
+ parse value '' with dsnl. dsns.
+ Call GetDsnList
+ Address ispexec "control errors return"
+ Address ispexec "vget (filesupd)"                                     /*005.1*/
+ Call MakeWlib
+ Call Load
+
+ /* build defs */
+ idanamel  = 'SEL 1 TEXT 80'                   /* name length pairs         */
+ idadeffld = 'TEXT'                            /* default name for sort etc */
+ Address Ispexec
+ "control errors return"
+ "vget (zscrmaxd zscrmaxw) shared"
+ /*
+ "vget zpf05"
+ if zpf05='' then do
+   zpf05='RFIND'
+   "vput zpf05"
+ end
+ */
+ parse value 80       zscrmaxd 1       0        'ZCMD',
+        with idascrwt idascrdp idatop idacsrp idacsrf idad. .
+ parse value xrange('11'x,'17'x) with idaai1 +1 idaai2 +1 idaai3 ,
+        +1 idaat1 +1 idaat2 +1 idaat3 +1 idaat4 .
+ parse value idaat1 idaat2 idaat3 idaat4 ,
+        with idaatt idaatg idaatb idaatw
+
+ /* field mappings */
+ idanames=''
+ do i=1 to words(idanamel) by 2
+   n=word(idanamel,i)
+   zz=Value('IDAF'n'L',word(idanamel,i+1))
+   idanames=idanames n                /* list of names only */
+ end
+ interpret "drop" idanames
+ idaf. = '?'
+ p     = 1
+ do i=1 to words(idanames)
+   n =word(idanames,i)           /* field id               */
+   l =word(idanamel,(i*2))
+   $ =Value('IDAF'n'AP',p)       /* attribute position     */
+   $ =Value('IDAF'n'P',p+1)      /* data position          */
+   $ =Value('IDAF'n'L',l)        /* field length           */
+   zz=Value('IDAF.'n,p+1 l)
+   p=p+l+1                       /* pos of next attr       */
+ end
+ pnltexth=left('S Text',78)'A'
+ idafalll=p-1                    /* total length           */
+ idapanel   = 'CBTSEA#L'
+
+ /* Controller     */
+ zcmd=''
+ "newstack"
+ queue  ''
+ queue  'Use the Search command to find lines in the CBT.FILE001 dataset',
+        'with text.'
+ queue  ''
+ queue  'Use the HELP command to see details.'
+ queue  ''
+ queue  'CBTHLQ value    'idaat2 cbthlq
+ queue  'CBTSUF value    'idaat2 cbtsuf
+ queue  ''
+ queue  '# Datasets found'idaat2 dsnl.0
+ idad.0 =queued()
+ do n=1 to idad.0
+   parse pull r
+   idad.n=idaat3''r
+ end
+ "delstack"
+
+ /* save / set RFIND pfk */
+ rfindpfk=''
+ address ispexec "vget (ZPF01 ZPF03 ZPF04 ZPF05 ZPF06 ZPF07 ZPF08",
+            "ZPF09 ZPF10 ZPF11 ZPF12)"
+ do n=1 to 12 until rfindpfk<>''
+   v = right(n,2,0)
+   t = translate(value('ZPF'v))
+   if t='RFIND' | t='RRFIND' then rfindpfk='ZPF'v
+ end
+
+ /* run */
+ cc=Dialog()
+ Call Close
+
+ /* terminate */
+Close:
+ arg _rc _txt
+ if _txt<>'' then say _txt
+ if ddlist<>'' then do
+   address ispexec "libdef ispplib"
+   Call XTSO "free dd("ddlist")"
+ end
+ exit word(_rc 0,1)
+
+/*
+  ISPF scrollable dynamic panel area
+*/
+Dialog:
+trace off
+ address ispexec
+ Do forever
+   /* build panel area */
+   idaarea=''
+   pnllo=0
+   do pnlli=idatop to idad.0 until pnllo>=idascrdp
+     if left(idad.pnlli,1)='-' then iterate /* suppressed */
+     idaarea=idaarea''left(idad.pnlli,idascrwt)
+     pnllo=pnllo+1
+     pnldlp.pnllo=pnlli                  /* data list pos */
+   end
+   if idacsrf='IDAAREA' then idacsrp=((idacsrp%idascrwt)*idascrwt)+2
+   else parse value 'ZCMD 1' with idacsrf idacsrp
+   pnlstatl=right(idatop 'of' idad.0,22)
+   idalines=idad.0
+   idasmsg='line' idatop 'of' idalines
+   if rfindpfk<>'' then do
+     zz=value(rfindpfk)
+     zz=value(rfindpfk,'RRFIND')
+     address ispexec "vput" rfindpfk
+   end
+   "display panel("idapanel")"
+   cc=rc
+   if rfindpfk<>'' then do
+     zz=Value(rfindpfk,'RFIND')
+     address ispexec "vput" rfindpfk
+     zz=Value(rfindpfk)
+   end
+   if cc>8 then exit xmsg('panel' idapanel 'rc' cc zerrlm)
+   if cc>4 | wordpos(translate(zcmd),'END RETURN')>0 then return 4
+   idalmsg=''
+
+   /* handle primary commands */
+   if zcmd<>'' then do
+     cc=Pcmd()
+     if cc>1 then Return cc
+     if cc=1 then iterate
+     zcmd=''
+   end
+
+   /* pull line commands */
+   pnlln   =0                                        /* panel line number     */
+   pnllcmde=0
+   pnllcmdn =0
+   do pnlap=1 to zscrmaxd*idascrwt by idascrwt
+     pnlln   =pnlln+1
+     if substr(idaarea,pnlap,1)>idaai3 then iterate /* not selectable        */
+     pnlsel  =strip(substr(idaarea,pnlap+1,idafsell))
+     pnldln=pnldlp.pnlln                            /* data line no          */
+     if left(idad.pnldln,1)>idaai3 then iterate     /* not selectable        */
+     if pnlsel='' ,
+       & substr(idad.pnldln,idafselp,idafsell)<>'' then do /* field cleared? */
+       zz=SetField(pnldln,'sel',' ','i1')           /* clear data list field */
+       pnllcmdn=pnllcmdn+1
+       iterate
+     end
+     if pnlsel<>'' then do
+       pnllcmdn=pnllcmdn+1
+       pnlline =strip(substr(idaarea,pnlap,idascrwt)) /* entire line incl attr*/
+       cc=Lcmd(pnlsel,pnlline,pnlln,pnldln)
+       if cc<>0 then SetField(lcdln,'sel',lcmd,idaai3)
+       pnllcmde=cc
+       if cc<>0 then leave
+     end
+   end
+   if pnllcmde<>0 then iterate
+   "vget (zverb zscrolla zscrolln) shared"
+
+   /* point-and-shoot */
+   if wordpos(zverb,'DOWN UP')=0 ,
+   &  pnllcmdn=0 & idacsrf='IDAAREA' then do
+     pnlap   =((idacsrp%idascrwt)*idascrwt)+1       /* pos of line start     */
+     pnlln   =(idacsrp%idascrwt)+1                  /* panel line nr         */
+     pnldln  =pnldlp.pnlln
+  /* if left(idad.pnldln,1)>idaai3 then iterate */  /* not selectable        */
+     pnlline =strip(substr(idaarea,pnlap,idascrwt)) /* entire line incl attr */
+     cc=Lcmd('S',pnlline,pnlln,pnldlp.pnlln)
+   end
+
+   /* handle scrolling */
+   if wordpos(zverb,'DOWN UP')>0 then do
+     vs=space(zverb zscrolla,0) /* verb & scroll */
+     Select
+       when vs='UPMAX'   then idatop=1
+       when vs='DOWNMAX' then idatop=idad.0 -$plvline+1
+       when zverb='UP'   then do /* idatop=idatop-zscrolln */
+         n=zscrolln
+         lp=idatop
+         do p=idatop to 1 by -1 while n>=0
+           if left(idad.p,1)<>'-' then parse value n-1 p with n lp
+         end
+         idatop=lp
+         idacsrf='ZCMD'
+       end
+       when zverb='DOWN' then do /* idatop=idatop+zscrolln */
+         n=zscrolln
+         do p=idatop to idad.0 while n>0
+          if left(idad.p,1)<>'-' then n=n-1
+         end
+         idatop=p
+         idacsrf='ZCMD'
+       end
+       otherwise nop
+     end
+     zscrolln=''
+     if idatop<1 then idatop=1
+     if idatop>idad.0 then idatop=idad.0
+   end /* scroll */
+
+ end /* main */
+ Return 4
+
+ /* line command handler */
+LCmd:                          /* linecmd, pnlline nr, dataline nr */
+ arg lcmd,lcline,lcpln,lcdln
+ Select
+   when lcmd='S'  then do
+     do n=lcdln to 1 by -1 until left(idad.n,1)<idaat1
+     end
+     r =translate(idad.n,' ',xrange('11'x,'17'x))
+     fn=right(word(substr(r,8),1),4,0)
+     if dsns.fn='' then return lmsg('File' fn 'is not available')+1
+     lcds=GetDsn(fn)
+     cc=Listdsi("'"lcds"'")
+     if sysdsorg='PS' then Return IspAcc('view' lcds)
+     Return Memlist(GetDsn(fn))
+   end
+   when lcmd='L'  then Return LcList()
+   when lcmd='F'  then Return LcFetch()
+   when lcmd='Z'  then say translate(idad.lcdln,'?',xrange('11'x,'17'x))
+   otherwise return SetField(lcdln,'sel',lcmd,idaai3),
+             + lmsg('Invalid line command' lcmd)+1
+ end
+ zz=SetField(lcdln,'sel',' ',idaai1)
+ Return 0
+
+LcList:
+ do n=lcdln+1 to idad.0
+   if substr(idad.n,4,4)='FILE' then leave
+   if left(idad.n,1)='-' then idad.n=overlay(idaat3,idad.n)
+   else idad.n=overlay('-',idad.n)
+ end
+ Return 0
+
+LcFetch:
+ Signal on error name LcFetchE
+ parse var idad.lcdln . 'FILE'cbtn .
+ ds=GetDsn(cbtn)
+ if ds<>'' then Call Xtso "DEL '"ds"'"
+ zz=outtrap('lst.')
+ /*=cbtdown(space(cbthlq cbtn) 'U')*/                                  /*005.1*/
+ if wordpos(cbtn,filesupd) > 0 then cbtup = 'U'                        /*005.1*/
+ else cbtup = '   '                                                    /*005.1*/
+ cc=cbtdown(space(cbthlq cbtn) cbtup)                                  /*005.1*/
+ zz=outtrap('off')
+ if cc<>0 then do
+   say 'CBTDOWN error..'
+   do n=1 to lst.0
+     say ' ' lst.n
+   end
+   return 8
+ end
+ cc=GetDsnList()     /* refresh */
+ ds=GetDsn(cbtn)
+ if sysdsn("'"ds"'")<>'OK' then return lmsg('Fetch' cbtn 'failed')+8
+ trace off
+ cbtn=right(cbtn,4,0)
+ dsns.cbtn='*'
+ idad.lcdln=overlay('*',idad.lcdln,80,1)
+ zz=SetField(pnldln,'sel',' ','i1')                     /* clear select field */
+ Return lmsg('File' cbtn 'fetched')
+LcFetchE:
+ Call off error
+ Return lmsg('Error running CBTDOWN')+8
+
+ /*                   primary command handler                        */
+PCmd: /* parm = panel line pos, panel line nr */
+ parse var zcmd pcvrb pcdata
+ Select
+   when Abbrev('SEARCH',pcvrb,1) then return PcSearch()
+   when Abbrev('LIST',pcvrb,1) then return PcList()
+   when Abbrev('NUMBER',pcvrb,1) then Return PcNumber()
+   when Abbrev('FIND',pcvrb,1) then Return PcFind()
+   when Abbrev('RFIND',zcmd,2) then Return PcFind()
+   when Abbrev('RESET',zcmd,3) then return Reset()+1
+   when Abbrev('CBTVIEW',zcmd,4) | zcmd='CV' then Return RunExt("CBTVIEW")
+   when Abbrev('VIEW',zcmd,1) then Return RunExt("CBTVIEW")
+   when Abbrev('DSNLIST',zcmd,1) then Return DsnList()
+   when Abbrev('VERSION',zcmd,3) then return lmsg('Version' cbtsver)
+   when pcvrb='SL' then do
+     cc=PcSearch()
+     pcdata=''
+     return PcList()
+   end
+   when pcvrb='IF' then Return PcFilter(pcdata)
+   when zcmd ='F1' then ,
+     return XISP("view dataset('"GetDsn(1)"')")
+   when pcvrb='SET'  then do
+     parse var pcdata v .'=' d
+     if d='' then return lmsg('invalid format')+1
+     zz=value(v,strip(d))
+     return lmsg('Value for' v 'is now' value(v))
+   end
+   when pcvrb='ZL' then zz=RexxGblv('rlist var('pcdata')')
+   when zcmd  ='TEST' then say 'Prompt:' PPrompt('Just;  testing','y')
+   otherwise return lmsg('Invalid command')+1
+ End
+ Return 0
+
+PcNumber:  /* set display at name         */
+ if pcdata='' then do   /* next */
+   do n=idatop+1 to idad.0 until left(idad.n,1)<idaat1
+   end
+   idatop=n
+   return 0
+ end
+ if datatype(pcdata)<>'NUM' then return lmsg('Missing number')+1
+ ls='FILE'right(pcdata,4)
+ do n=1 to idad.0 until substr(idad.n,4,8)=ls
+ end
+ if n<idad.0 then idatop=n
+ else call lmsg 'not found'
+ return 0
+
+PcFind:    /* set display at line containing text */
+ if pcdata='' then do
+   if pcfindsave='' then return lmsg('No previous find parm')
+   pcdata=pcfindsave
+ end
+ pcfindsave=pcdata
+ p=idatop+1 idad.0 1
+ if word(pcdata,words(pcdata))='PREV' then do
+   p=idatop-1 1 '-1'
+   pcdata=strip(delword(pcdata,words(pcdata)))
+ end
+ if word(pcdata,words(pcdata))='LAST' then do
+   p=idad.0 1 '-1'
+   pcdata=strip(delword(pcdata,words(pcdata)))
+ end
+ parse var p p1 p2 p3
+ do p=p1 to p2 by p3
+   if left(idad.p,1)='-' then iterate
+   if pos(pcdata,translate(idad.p))>0 then do
+     idatop=p
+     return 0
+   end
+ end
+ return lmsg(pcdata 'not found')
+
+PcFilter:  /* filter on conditional value */
+           /* analyze expression like date1>2020 */
+ signal on error  name PcFilterE
+ signal on syntax name PcFilterE
+ arg fltprm
+ fltp=Verify(fltprm' ','=<>\/','m')
+ parse var fltprm fltvrb =(fltp) flts
+ fltp   =Verify(flts' ','=<>\/','n')
+ parse var flts fltcnd =(fltp) fltval
+ if fltcnd='\' then fltcnd='<>'
+ fltvrb =strip(fltvrb)
+ fltval =strip(fltval)
+ fltvall=length(fltval)
+ parse var idaf.fltvrb fltpos fltlen
+ if Verify(fltval,'*%','m')>0 then do     /* using mask, require pgm RXPATTRN */
+   drop r. /* just in case */
+   cc=RxPattrn('stem(idad.) pos('fltpos') len('fltlen') mask('fltval')',
+      'rstem(r.)')
+   /* 'mchr('idaai1') nchr(-)')  */
+   do n=1 to idad.0
+     if left(idad.n,1)>idaai3 then iterate
+     if r.n='M' then idad.n=overlay(idaai1,idad.n)
+     else idad.n=overlay('-',idad.n)
+   end
+   drop r.
+   idatop=1
+   return 0
+ end
+ if fltcnd='/' then fltt="pos('"fltval"',substr(idad.n,"fltpos","fltlen"))>0"
+ else fltt="substr(idad.n,"fltpos","fltvall")"fltcnd"'"fltval"'"
+ Interpret ,      /* the whole loop is interpreted due to performance */
+       "do n=1 to idad.0;",
+         "if left(idad.n,1)>idaai3 then iterate;",          /* non-selectable */
+         "if" fltt "then idad.n=overlay(idaai1,idad.n);",   /* show line      */
+         "else idad.n=overlay('-',idad.n);",                /* hide line      */
+       "end;"
+ idatop=1
+ return 0
+PcFilterE:
+ Return lmsg('Error' rc '-' Errortext(rc))+1
+
+ResetCmd: zcmd='';return 0
+
+Reset:   /* make all rows visible, clear selection */
+ do n=1 to idad.0
+   if left(idad.n,1)='-' then idad.n=overlay(idaat3,idad.n)
+ end
+ parse value 0 1 with d0hidn idatop zcmd
+ return 0
+
+PcList:  /* show only headers */
+ Select
+   when pcdata='' then do n=1 to idad.0
+     if left(idad.n,1)>idaai3 then idad.n=overlay('-',idad.n)
+   end
+   when Abbrev('ALL',pcdata,1) | pcdata='*' then do
+     dn=0
+     drop idad.
+     do n=1 to list.0
+       parse value dn+1 '- 'idaat3''substr(list.n,6) with dn idad.dn
+       if substr(list.n,5,5)='*FILE' then do
+         idad.dn=overlay(idaai1,idad.dn)
+         cbtn=left(list.n,4)
+         idad.dn=overlay(dsns.cbtn,idad.dn,80,1)
+       end
+     end
+     idad.0=dn
+     idatop=1
+   end
+   when Abbrev('AVAILABLE',pcdata,2) then do
+     dn=0
+     drop idad.
+     do n=1 to list.0
+       parse value dn+1 '- 'idaat3''substr(list.n,6) with dn idad.dn
+       cbtn=left(list.n,4)
+       if substr(list.n,5,5)='*FILE' & dsns.cbtn='*' then do
+         idad.dn=overlay(idaai1,idad.dn)
+         idad.dn=overlay(dsns.cbtn,idad.dn,80,1)
+       end
+     end
+     idad.0=dn
+     idatop=1
+   end
+   otherwise return lmsg('Bad parm:' pcdata)
+ end
+ Return 0
+
+ /* search the dataset */
+PcSearch:
+ /* make test statement */
+ test=pcdata
+ p=0
+ do until p=0
+   p=pos('(',test,p+1)
+   if p>0 then test=insert(' ',test,p)
+ end
+ p=-1
+ do until p=0
+   p=pos(')',test,p+2)
+   if p>0 then test=insert(' ',test,p-1)
+ end
+ tx=''
+ do while test<>''
+   test=strip(test)
+   select
+     when pos(word(test,1),'&|')>0 then do
+       tx=tx word(test,1)
+       test=subword(test,2)
+     end
+     when word(test,1)='(' then do
+       if pos(right(tx,1),'&|')=0 then tx=tx '|'
+       tx=tx '('
+       test=subword(test,2)
+     end
+     when word(test,1)=')' then do
+       tx=tx ')'
+       test=substr(test,2)
+     end
+     otherwise do
+       if pos(right(tx,1),'(&|')=0 then tx=tx '&'
+       tx=tx "pos('"word(test,1)"',slst.n)>0"
+       test=subword(test,2)
+     end
+   end
+ end
+ drop sel.
+ sel.=0
+ seln=0
+ tx="do sln="slstmin "to" slstmax";n=right(sln,4,0);",
+    "if" subword(tx,2) "then do;sel.n=1;seln=seln+1;end;end"
+ Interpret tx  /* run test */
+ if seln=0 then return lmsg('Not found')
+ /* make list */
+ dn=0
+ drop idad.
+ do n=1 to list.0
+   q=left(list.n,4)
+   if \sel.q then iterate
+   c=idaat1
+   if substr(list.n,5,5)='*FILE' then c=idaai1
+   parse value dn+1 c' 'idaat3''substr(list.n,6) with dn idad.dn
+   if substr(list.n,5,1)='*' then do
+     cbtn=left(list.n,4)
+     idad.dn=overlay(dsns.cbtn,idad.dn,80,1)                  /* Available */
+   end
+ end
+ idad.0=dn
+ idatop=1
+ return Lmsg(seln 'files found')
+ return 0
+ Return PcList() + lmsg(seln 'files found')
+
+GetField:
+ arg gfn,gff                      /* data rec#, fieldname */
+ parse var idaf.gff gfp gfl
+ return substr(idad.gfn,gfp,gfl)
+
+SetField:
+ parse arg sfn .,sff .,sfv,sfc .  /* line nr, name, value, attrchr */
+ upper sff sfc
+ parse var idaf.sff sfp sfl
+ if length(sfc)>1 then sfc=value('IDAA'sfc)
+ if sfc<>'' then idad.sfn=overlay(sfc''sfv,idad.sfn,sfp-1,sfl+1)
+ else            idad.sfn=overlay(sfv,idad.sfn,sfp,sfl)
+ return 0
+
+SetAttr:
+ arg sfn .,sff .,sfa .            /* line nr, field, attrchr */
+ parse var idaf.sff sfp sfl
+ if length(sfa)>1 then sfa=value('IDAA'sfa)
+ idad.sfn=overlay(sfa,idad.sfn,sfp-1)
+ return 0
+
+LMsg: idalmsg=right(arg(1),79);return word(arg(2) 0,1)
+XMsg: parse arg zedlmsg;return xisp("setmsg msg(ISRZ000)")
+XTSO: zz=outtrap('XT.');address TSO arg(1);zz=outtrap('off');return rc
+RunExt:
+ rfpfk=''
+ if rfindpfk<>'' then do
+   rfpfk=rfindpfk
+   zz=Value(rfpfk,'RFIND')
+   address ispexec "vput" rfpfk
+ end
+ address TSO arg(1)
+ cc=rc
+ if rfpfk<>'' then do
+   zz=Value(rfpfk,'RRFIND')
+   address ispexec "vput" rfpfk
+ end
+ return cc
+XIsp: zerrlm='';address ispexec arg(1); return rc
+Upper1:  return translate(left(arg(1),1))substr(arg(1),2) /* upcase 1st char */
+LowCase: return translate(arg(1),xrange('a','z'),xrange('A','Z'))
+Requote: return "'"space(strip(arg(1),"b","'"),0)"'"
+IspAcc: Procedure expose dsnl.
+ arg acc dsn
+ if datatype(dsn)='NUM' then dsn=GetDsn(dsn)
+ if dsn='' then return lmsg('file' word(arg(1),2) 'not located')
+ dsn=requote(dsn)
+ if sysdsn(dsn)<>'OK' then return lmsg(dsn 'not found')
+ Return Xisp(acc "dataset("dsn")")
+
+Memlist:
+ arg mlds .
+ address ispexec "lminit dataid(mldid) dataset('"mlds"')"
+ if rc<>0 then return lmsg("lminit" mlds "failed" rc)
+ address ispexec "memlist dataid("mldid") field(9)"
+ cc=rc
+ address ispexec "lmfree dataid("mldid")"
+ if cc=0 then return 0
+ Return lmsg("memlist" mlds "rc" rc)
+
+PPrompt:
+ parse arg ppt,ppo
+ idaarea=''
+ do while ppt<>''
+   parse var ppt t';'ppt
+   idaarea=idaarea || left(t,80)
+ end
+ if translate(ppo)='Y' then idaarea=idaarea || left(' ',80),
+     || left(idaatg'Hit'idaatw'ENTER'idaatg'to continue,',
+     'or hit'idaatw'or enter'idaatw'Cancel'idaatg'to abort',80)
+ zcmd=''
+ do until wordpos(zcmd,'ENTER END')>0
+   address ispexec "display panel(CBTSEA#T)"
+ end
+ return word('OK CANCEL',wordpos(zcmd,'ENTER END'))
+
+DsnList: /* ISPF 3.4 of prefix */
+ address ispexec
+ zerrlm=''
+ "lmdinit listid(dsldid) level("cbthlq".FILE*.**)"
+ if rc>0 then return xmsg('lmdinit failed rc' rc zerrlm)
+ "lmddisp listid("dsldid")"
+ if rc>0 then call xmsg 'lmdlist failed rc' rc zerrlm
+ "lmdfree listid("dsldid")"
+ return 0
+
+Load:  /* load file 1 */
+ slst.=''
+ cbtf1=GetDsn(1)
+ if pipe then do
+   if $trace then call xmsg 'Using PIPE'
+   Call on error name Load1E
+   mo=Msg('OFF')
+   "pipe < '"cbtf1"' | zone 73-76 all /FILE/ |",
+     "spec 77-80 1 6-68 6 | stem list."
+   zz=Msg(mo)
+ end
+ if \pipe then do
+   if $trace then call xmsg 'Using EXECIO'
+   Address TSO
+   cc=bpxwdyn("alloc da('"cbtf1"') shr rtddn(dd1)")
+   if cc<>0 then exit lmsg(cbtf1 'alloc' cc)
+   "newstack"
+   "execio * diskr" dd1 "(finis)"
+   cc=rc
+   cc=bpxwdyn('free dd('dd1')')
+   qn=queued()
+   ln=0
+   do qn                                    /* filter, leave 'proper' records */
+     parse pull r
+     if substr(r,73,4)<>'FILE' then iterate
+     parse value ln+1 substr(r,77,4)||substr(r,5,64) with ln list.ln
+     if left(list.ln,1)=' ' then list.ln=overlay('0',list.ln)   /* 4 numbers  */
+     parse upper value space(left(list.ln,78)) with k =5 . +1 t /* searchable */
+     slst.k=slst.k t
+   end
+   list.0=ln
+   "delstack"
+ end
+ slstmin=left(list.1,4)
+ slstmax=k
+ slst.0=slstmax
+ return 0
+Load1E:
+ Call off error
+ "clear"
+ address ispexec 'CONTROL DISPLAY REFRESH'
+ pipe=0
+ return 0
+
+GetDsn: return value('dsnl.'arg(1)+0)
+
+GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf
+ trace off
+ arg gdp
+ dsnn=0
+ pfl =length(cbthlq)+6       /* hlq + '.FILE' */
+ zz=outtrap('lst.')
+ address tso "listc lvl('"cbthlq"')"
+ zz=outtrap('off')
+ pff=cbthlq'.FILE'
+ do lstn=1 to lst.0 by 2
+   dsn=word(lst.lstn,3)
+   parse var dsn . =(pfl) cbtn '.' sf
+   if datatype(cbtn)<>'NUM' then iterate
+   do sn=1 to words(cbtsuf) until word(cbtsuf,sn)=sf
+   end
+   if sn<=words(cbtsuf) then do
+     zz=Value('dsnl.'cbtn+0,dsn)
+     parse var dsn . (pff) cbtn '.' .
+     zz=Value('dsns.'right(cbtn,4,0),'*')            /* set is-dataset */
+     dsnn=dsnn+1
+   end
+ end
+ dsnl.0=dsnn
+ return 0
+ do n=1000 to 999  /* while debugging */
+   if dsnl.n<>'' then say n':' dsnl.n
+ end
+
+ /*-------------------  make dynamic ispplib --------------------------*/
+MakeWlib:
+ Address TSO
+ /* allocate datasets */
+ Call DoAlloc 'new tracks space(1,1) unit(sysda)',
+           'LRECL(80) RECFM(F,B) BLKSIZE(4080)'     /* alt SYSIN    */
+ sysindd=dadd
+ Call DoAlloc 'dd(@SYSPRT) dummy'                   /* alt SYSPRINT */
+ /*ll DoAlloc 'new tracks space(5,5) unit(sysda)',
+           'LRECL(121) RECFM(F,B) BLKSIZE(0)' */
+ sysprtdd=dadd
+ sysprtdd='@SYSPRT'
+ Call DoAlloc 'new tracks space(5,5) unit(sysda)',
+           'LRECL(80) RECFM(F,B) BLKSIZE(4080) dir(8)'
+ wrklibdd=dadd
+
+ /* write members */
+ "newstack"
+ do n=1 to sourceline() until word(sourceline(n),1)='./';end
+ do m=n to sourceline() until sourceline(m)='./ ENDUP'
+   queue sourceline(m)
+ end
+ "execio" queued() "diskw" sysindd "(finis)"
+ cc=rc
+ "delstack"
+ if cc<>0 then call close 8 "Write SYSIN failed" cc
+ /* Now invoke program with alternate ddnames.   */
+ pgmddl = copies('00'x,8*4) ||,
+          left(sysindd,8)   ||,      /* DDname  5 override: SYSIN     */
+          left(sysprtdd,8)  ||,      /* DDname  6 override: SYSPRINT  */
+          copies('00'x,8*2) ||,
+          left(wrklibdd,8)  ||,      /* DDname  9 override: SYSUT2    */
+          copies('00'x,8*5)
+ parm='NEW'
+ address LINKMVS 'IEBUPDTE PARM PGMDDL'
+ prc=rc
+ if prc<>0 then "pipe < ddname="sysprint "| term"
+ else do
+   Call Xtso 'FREE DD('sysindd sysprtdd')'
+   ddlist=wrklibdd
+ end
+ cc=XISP("libdef ispplib library id("wrklibdd") stack")
+ if cc<>0 then call close 8 'Libdef failed' cc zerrlm
+ return 0
+
+ /* allocate subroutine */
+DoAlloc:
+ cc=BPXWDYN('Alloc' arg(1) 'reuse rtddn(dadd)')
+ if cc<>0 then Call Close 'Alloc' arg(1) 'rc' cc
+ ddlist=ddlist dadd
+ return 0
+
+ /*------------------  Dynamic members  -------------------------------
+./ ADD NAME=CBTSEA#L
+)Attr
+ + type(text   ) color(green) caps(off)
+ " type(text   ) color(blue ) caps(off)
+ ! type(text   ) color(yellow) caps(off)
+ _ type(input  ) color(turq ) caps(on ) hilite(uscore)
+ | area(dynamic) extend(on) scroll(on)  /* required */
+ /* input 1 - 3 */
+ 11 type(datain ) color(turq  ) caps(off) hilite(uscore)
+ 12 type(datain ) color(yellow) caps(off) hilite(uscore)
+ 13 type(datain ) color(red   ) caps(off) hilite(uscore)
+ /* text 1 - 4 */
+ 14 type(dataout) color(turq  ) caps(off)
+ 15 type(dataout) color(green ) caps(off)
+ 16 type(dataout) color(blue  ) caps(off)
+ 17 type(dataout) color(white ) caps(off)
+)Body expand(\\) width(80)
+"                                %CBT Search     &idasmsg
+%ISPF cmd ==>_zcmd \ \+ +Scrl_scrl+
+!&idalmsg
++
+%&pnltexth\ \
+|idaarea\ \|
+)Init
+ .cursor = &idacsrf            /* set cursor in field        */
+ .csrpos = &idacsrp            /* set cursor pos in field    */
+ .HELP = CBTSEA#H
+*REXX(*,idasmsg)
+ idasmsg=right(idasmsg,30)
+*ENDREXX
+ if (&rfindpfk NE &Z)
+   vput &rfindpfk
+)Proc
+ &idacsrp = .csrpos            /* get cursor pos in field    */
+ &idacsrf = .cursor            /* get fieldname of cursor    */
+ &idaresp = .resp
+ &$plvline = lvline(idaarea)
+*REXX(*,zcmd)
+ if abbrev('LIST',zcmd,1) then zcmd='LI'
+ if zcmd='RRFIND' then zcmd='RFIND'
+*ENDREXX
+ &idasmsg = &Z
+)End
+./ ADD NAME=CBTSEA#T
+)Attr
+ + type(text   ) color(green) caps(off)
+ " type(text   ) color(blue ) caps(off)
+ _ type(input  ) color(turq ) caps(on ) hilite(uscore)
+ | area(dynamic) extend(on) scroll(on)  /* required */
+ /* text 1 - 4 */
+ 14 type(dataout) color(turq  ) caps(off)
+ 15 type(dataout) color(green ) caps(off)
+ 16 type(dataout) color(blue  ) caps(off)
+ 17 type(dataout) color(white ) caps(off)
+)Body expand(\\) width(80)
+%                                 CBT Search     &idasmsg
+%ISPF cmd ==>_zcmd \ \+ +
++
++
+|idaarea\ \|
+)Init
+*REXX(idasmsg)
+ idasmsg = right(idasmsg,30)
+*ENDREXX
+)Proc
+ &idasmsg = &Z
+ &idaresp = .resp
+ if (&zcmd EQ &Z)
+   &zcmd = &idaresp
+*REXX(zcmd)
+ if abbrev('CANCEL',zcmd,1) then zcmd='CANCEL'
+*ENDREXX
+)End
+./ ADD NAME=CBTSEA#H
+)Attr default(#[_)
+ @ area(scrl) extend(on)
+ _ type(input)  caps(off) hilite(uscore) color(turq)
+ [ type(text )  color(green)
+ ! type(text )  color(blue)
+)BODY expand(}}) width(80)
+#} }CBT Search Facility Help} }[
+#ISPF Command _ZCMD } }_scrl[
+[
+!   Use the#RIGHT!key to scroll down, #LEFT!key to scroll up, command
+!  #END!to return to the dialog.
+@SAREA1} }@
+)AREA SAREA1
+#
+#General description[
+[
+[Search the CBT file 1 for one or more words or part of words.
+[The words can be ANDED and ORed, default is AND. You can use parenthesis
+[to group words.
+[
+[The entire documentation section for sections with match(es) are shown.
+[
+[The search parameters are entered in the command line.
+[
+[You can call other CBT utilities from the command line, if they are
+[installed.
+[
+#The primary screen
+[
+[Contains a selection field, text and an indicator if the dataset is available
+[on disk (heading A).
+[
+#Primary commands
+[
+[ CBTView   !Start the CBTVIEW command from Lionel B Dyck. See notes.
+[ CV        !Start the CBTVIEW command from Lionel B Dyck. See notes.
+[
+[ DSnlist   !List datasets using ISPF 3.4
+[
+[ Find t d  !Find text 't' from current location direction 'd', where 'd'
+!            may be FIRST or LAST.
+[
+[ Find      !Repeat find using previous criteria. If you have a RFIND key
+!            defined you can use that too (se notes).
+[
+[ List      !Show only the section headers. Note that the full command LIST
+!            may be intercepted by ISPF, so be lazy and use L only.
+[
+[ List All  !Show all section headers.
+[
+[ List AVailable!Show section headers for available datasets.
+[
+[ Number n  !Locate file n.
+[
+[ RFin      !Repeat find using previous criteria. If you have a RFIND key
+!            defined you can use that too (se notes).
+[
+[ Search p  !Seach for words p.
+!            p is one or more strings (words or wordparts) separated by
+!            blank or a condition | (or) or & (and). Blank means &.
+!            Parenthesis can be used to group conditions.
+!            The words are case insensitive.
+!            Samples
+!             s rexx listcat               'rexx' and 'listcat'
+!             s rexx | listcat             'rexx' or 'listcat'
+!             s rexx | (listcat & panel)   'rexx' or 'listcat'+'panel'
+[
+[ SL p      !Seach for words p then show overview. This is a combination of
+!            the SEARCH and LIST commands.
+[
+#Line commands
+!
+[ F         !Fetch the file from the CBT website and store it locally, using
+!            the CBTHLQ variable. If the dataset already exist it will be
+!            updated.
+!
+[ L         !List or hide file text. The command  is a toggle, if the text is
+!            shown then the text is hidden and vice versa.
+!            Used initially after the LIST command to open a single entry.
+!
+[ S         !View CBT dataset.
+!            Note - Point'n'Shoot - place the cursor anywhere within a
+!            section and press ENTER to open the dataset view.
+[
+#Notes
+[
+!The full RFIND command will not work as it is intercepted by ISPF, but the
+!abbreviated form will, as well as any pfk you have assigned to RFIND.
+!
+!The CBTVIEW command is an external command written by Lionel B Dyck,
+!which provides for an alternate view of the CBT files, plus a method for
+!directly download a file from the CBT repository. You must ensure that it
+!is a available in order to use the Fetch line command.
+)Init
+)Proc
+)End
+./ ENDUP
+ */
