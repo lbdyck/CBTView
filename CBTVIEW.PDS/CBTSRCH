@@ -4,9 +4,8 @@
  Search the FILE0001 dataset, select dataset to open.
  Start the dialog and try a search.
 
- Other resources
-  panels CBTSEA#L, CBTSEA#H
-  program PIPE (optional, detected)
+ Other external resources
+  pgm CBTDOWN from Lionel B Dyck if you want to download from CBTSRCH
 
  Configuration steps
   Modify the CBTHLQ and CBTSUF variables as follows:
@@ -46,18 +45,24 @@
                   Hilight search results
                   Primary command popup.
   007 2021-05-03  Slight change to primary command popup.
+                  Error message if dataset(s) not found.
+                  Fix lcmd select field reset issue.
+  008 2021-05-04  Popups during initialization.
+                  Drop optional use of PIPE.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='007.1 2021-05-03'
+ cbtsver='008.2 2021-05-04'
+ Address ispexec "control errors return"
+
  /* handle parameters */
  arg p
  parse value ' 'p  with p1 'CBTHLQ(' cbthlq ')' p2
  parse value p1 p2 with p1 'CBTSUF(' cbtsuf ')' p2
- parse value p1 p2 with p1 'TEST(' test ')' p2
+ parse value p1 p2 with p1 'TRACE(' trace ')' p2
  parse value p1 p2 with p1 'PARENT(' parent ')' p2     /* parent's name */
  if p1 p2<>'' then exit xmsg('Invalid parm:' space(p1 p2))
 
@@ -65,38 +70,29 @@
  if cbthlq = '' then cbthlq='CBT.V501'
  if cbtsuf = '' then cbtsuf='PDS DATA'
  upper cbthlq cbtsuf                      /* just in case                    */
- $trace=0
- pipe=0
- parse value '' with ddlist sysindd sysprtdd wrklibdd rfindpfk rfindpfs,
-       filesupd pcslist
-
- /* get started */
- parse value '' with dsnl. dsns.
- Call GetDsnList
- Address ispexec "control errors return"
- Address ispexec "vget (filesupd)"                                     /*005.1*/
- Call MakeWlib
- Call Load
-
- /* build defs */
+ $trace=(trace='Y')
  idanamel  = 'SEL 1 TEXT 80'                   /* name length pairs         */
  idadeffld = 'TEXT'                            /* default name for sort etc */
  Address Ispexec
- "control errors return"
  "vget (zscrmaxd zscrmaxw) shared"
- /*
- "vget zpf05"
- if zpf05='' then do
-   zpf05='RFIND'
-   "vput zpf05"
- end
- */
+ parse value 'CBTSEA#L' with idapanel ddlist sysindd sysprtdd wrklibdd,
+   rfindpfk rfindpfsfilesupd pcslist
  parse value 80       zscrmaxd 1       0        'ZCMD',
         with idascrwt idascrdp idatop idacsrp idacsrf idad. .
  parse value xrange('11'x,'17'x) with idaai1 +1 idaai2 +1 idaai3 ,
         +1 idaat1 +1 idaat2 +1 idaat3 +1 idaat4 .
  parse value idaat1 idaat2 idaat3 idaat4 ,
         with idaatt idaatg idaatb idaatw
+
+ /* get started */
+ parse value '' with dsnl. dsns.
+ if GetDsnList()<>0 then exit 8
+ if GetDsn(1)='' then exit xmsg('File 1 not located')+8
+ Address ispexec "vget (filesupd)"                                     /*005.1*/
+ zz=Time('r')
+ if $trace then tracetime=time('r')
+ Call MakeWlib
+ Call Load
 
  /* field mappings */
  idanames=''
@@ -119,7 +115,6 @@
  end
  pnltexth=left('S Text',78)'A'
  idafalll=p-1                    /* total length           */
- idapanel   = 'CBTSEA#L'
 
  /* Controller     */
  zcmd=''
@@ -152,6 +147,7 @@
  end
 
  /* run */
+ if $trace then call Traceit 'Ready'
  cc=Dialog()
  Call Close
 
@@ -295,16 +291,15 @@ LCmd:                          /* linecmd, pnlline nr, dataline nr */
      lcds=GetDsn(fn)
      cc=Listdsi("'"lcds"'")
      if sysdsorg='PS' then Return IspAcc('view' lcds)
-     Return Memlist(GetDsn(fn))
+     lcrc = Memlist(GetDsn(fn))
    end
-   when lcmd='L'  then Return LcList()
-   when lcmd='F'  then Return LcFetch()
+   when lcmd='L'  then lcrc = LcList()
+   when lcmd='F'  then lcrc = LcFetch()
    when lcmd='Z'  then say translate(idad.lcdln,'?',xrange('11'x,'17'x))
-   otherwise return SetField(lcdln,'sel',lcmd,idaai3),
-             + lmsg('Invalid line command' lcmd)+1
+   otherwise lcrc=lmsg('Invalid line command' lcmd)+1
  end
- zz=SetField(lcdln,'sel',' ',idaai1)
- Return 0
+ if lcrc=0 then return SetField(lcdln,'sel',' ',idaai1)
+ else           return SetField(lcdln,'sel',lcmd,idaai3)
 
 LcList:
  do n=lcdln+1 to idad.0
@@ -382,8 +377,19 @@ PCmd: /* parm = panel line pos, panel line nr */
        if p='' | datatype(p)='NUM' then return 0
        zcmd=p
      end
-     when zcmd  ='TEST' then ,
-       return xmsg('Prompt:' PPrompt('Just;  testing','y'))
+     when zcmd  ='TEST1' then ,
+       return xmsg('Prompt:' PPrompt('Just','testing'))
+     when zcmd  ='TEST2' then ,
+       return xmsg('Prompt:' PPrompt('Yet','more','testing','oc'))
+     when zcmd  ='OPTL' then do
+       address ispexec "vget cbtsrch0 profile"
+       return lmsg('opts:' cbtsrch0)
+     end
+     when zcmd  ='OPTX' then do
+       cbtsrch0=''
+       address ispexec "vput cbtsrch0 profile"
+       return lmsg('opts cleared')
+     end
      otherwise return lmsg('Invalid command')+1
    End
  End
@@ -629,6 +635,11 @@ SetAttr:
 LMsg: idalmsg=right(arg(1),79);return word(arg(2) 0,1)
 XMsg: parse arg zedlmsg;return xisp("setmsg msg(ISRZ000)")
 XTSO: zz=outtrap('XT.');address TSO arg(1);zz=outtrap('off');return rc
+Traceit:
+ say time() format(time('e')-tracetime,6,2) arg(1)
+ tracetime=time('r')
+ return 0
+
 RunExt:
  rfpfk=''
  if rfindpfk<>'' then do
@@ -666,20 +677,21 @@ Memlist:
  Return lmsg("memlist" mlds "rc" rc)
 
 PPrompt:
- parse arg ppt,ppo
- idaarea=''
- do while ppt<>''
-   parse var ppt t';'ppt
-   idaarea=idaarea || left(t,80)
+ pnlarea=''
+ ppal=60
+ do ppn=1 to arg()
+   if translate(arg(ppn))='OC' then pnlarea=pnlarea || left(' ',ppal),
+     || center(idaatg'Hit'idaatw'ENTER'idaatg'to continue,',
+     'or hit'idaatw'END'idaatg'to abort',ppal)
+   else pnlarea=pnlarea || left(' 'arg(ppn),ppal)
  end
- if translate(ppo)='Y' then idaarea=idaarea || left(' ',80),
-     || left(idaatg'Hit'idaatw'ENTER'idaatg'to continue,',
-     'or hit'idaatw'or enter'idaatw'Cancel'idaatg'to abort',80)
  zcmd=''
- do until wordpos(zcmd,'ENTER END')>0
-   address ispexec "display panel(CBTSEA#T)"
- end
- return word('OK CANCEL',wordpos(zcmd,'ENTER END'))
+ address ispexec "addpop"
+ address ispexec "display panel(CBTSEA#P)"
+ cc=rc
+ address ispexec "rempop"
+ if cc>8 then return xmsg('rc' cc zerrlm)+8
+ return cc
 
 DsnList: /* ISPF 3.4 of prefix */
  address ispexec
@@ -692,47 +704,44 @@ DsnList: /* ISPF 3.4 of prefix */
  return 0
 
 Load:  /* load file 1 */
+ address ispexec "control display lock"
+ Call Pprompt idaatw'Loading data, please be patient'
  slst.=''
  cbtf1=GetDsn(1)
- if pipe then do
-   if $trace then call xmsg 'Using PIPE'
-   Call on error name Load1E
-   mo=Msg('OFF')
-   "pipe < '"cbtf1"' | zone 73-76 all /FILE/ |",
-     "spec 77-80 1 6-68 6 | stem list."
-   zz=Msg(mo)
+ if $trace then call traceit 'Load alloc started'
+ Address TSO
+ cc=bpxwdyn("alloc da('"cbtf1"') shr rtddn(dd1)")
+ if cc<>0 then exit lmsg(cbtf1 'alloc' cc)
+ "newstack"
+ if $trace then call traceit 'Load read started'
+ "execio * diskr" dd1 "(finis)"
+ cc=rc
+ cc=bpxwdyn('free dd('dd1')')
+ qn=queued()
+ ln=0
+ if $trace then Call Traceit 'Load read done'
+ address ispexec "control display lock"
+ Call Pprompt idaatb'Loading data, please be patient',,
+     idaatw'Formatting data, we appreciate your continued patience'
+ do qn                                    /* filter, leave 'proper' records */
+   parse pull r
+   if substr(r,73,4)<>'FILE' then iterate
+   parse value ln+1 substr(r,77,4)||substr(r,5,64) with ln list.ln
+   if left(list.ln,1)=' ' then list.ln=overlay('0',list.ln)   /* 4 numbers  */
+   parse upper value space(left(list.ln,78)) with k =5 . +1 t /* searchable */
+   slst.k=slst.k t
  end
- if \pipe then do
-   if $trace then call xmsg 'Using EXECIO'
-   Address TSO
-   cc=bpxwdyn("alloc da('"cbtf1"') shr rtddn(dd1)")
-   if cc<>0 then exit lmsg(cbtf1 'alloc' cc)
-   "newstack"
-   "execio * diskr" dd1 "(finis)"
-   cc=rc
-   cc=bpxwdyn('free dd('dd1')')
-   qn=queued()
-   ln=0
-   do qn                                    /* filter, leave 'proper' records */
-     parse pull r
-     if substr(r,73,4)<>'FILE' then iterate
-     parse value ln+1 substr(r,77,4)||substr(r,5,64) with ln list.ln
-     if left(list.ln,1)=' ' then list.ln=overlay('0',list.ln)   /* 4 numbers  */
-     parse upper value space(left(list.ln,78)) with k =5 . +1 t /* searchable */
-     slst.k=slst.k t
-   end
-   list.0=ln
-   "delstack"
- end
+ list.0=ln
+ "delstack"
  slstmin=left(list.1,4)
  slstmax=k
  slst.0=slstmax
+ if $trace then Call Traceit 'Load format done'
  return 0
 Load1E:
  Call off error
  "clear"
  address ispexec 'CONTROL DISPLAY REFRESH'
- pipe=0
  return 0
 
 GetDsn: return value('dsnl.'arg(1)+0)
@@ -744,7 +753,9 @@ GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf
  pfl =length(cbthlq)+6       /* hlq + '.FILE' */
  zz=outtrap('lst.')
  address tso "listc lvl('"cbthlq"')"
+ cc=rc
  zz=outtrap('off')
+ if cc<>0 then return xmsg('No datasets found for cbthlq' cbthlq)+8
  pff=cbthlq'.FILE'
  do lstn=1 to lst.0 by 2
    dsn=word(lst.lstn,3)
@@ -767,6 +778,7 @@ GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf
 
  /*-------------------  make dynamic ispplib --------------------------*/
 MakeWlib:
+ if $trace then Call Traceit 'MakeWlib start'
  Address TSO
  /* allocate datasets */
  Call DoAlloc 'new tracks space(1,1) unit(sysda)',
@@ -780,8 +792,10 @@ MakeWlib:
  Call DoAlloc 'new tracks space(5,5) unit(sysda)',
            'LRECL(80) RECFM(F,B) BLKSIZE(4080) dir(8)'
  wrklibdd=dadd
+ if $trace then Call Traceit 'MakeWlib done '
 
  /* write members */
+ if $trace then Call Traceit 'write members start'
  "newstack"
  do n=1 to sourceline() until word(sourceline(n),1)='./';end
  do m=n to sourceline() until sourceline(m)='./ ENDUP'
@@ -801,13 +815,20 @@ MakeWlib:
  parm='NEW'
  address LINKMVS 'IEBUPDTE PARM PGMDDL'
  prc=rc
- if prc<>0 then "pipe < ddname="sysprint "| term"
+ if prc<>0 then do
+   "execio * diskr sysprint (stem prt. finis)"
+   say 'UPDTE messages...'
+   do n=1 to prt.0
+     say prt.n
+   end
+ end
  else do
    Call Xtso 'FREE DD('sysindd sysprtdd')'
    ddlist=wrklibdd
  end
  cc=XISP("libdef ispplib library id("wrklibdd") stack")
  if cc<>0 then call close 8 'Libdef failed' cc zerrlm
+ if $trace then Call Traceit 'write members done '
  return 0
 
  /* allocate subroutine */
@@ -839,7 +860,7 @@ DoAlloc:
 %ISPF cmd ==>_zcmd \ \+ +Scrl_scrl+
 !&idalmsg
 +
-%&pnltexth\ \
+%&pnltexth
 |idaarea\ \|
 )Init
  .cursor = &idacsrf            /* set cursor in field        */
@@ -890,6 +911,24 @@ DoAlloc:
 *REXX(zcmd)
  if abbrev('CANCEL',zcmd,1) then zcmd='CANCEL'
 *ENDREXX
+)End
+./ ADD NAME=CBTSEA#P
+)Attr
+ + type(text   ) color(green) caps(off)
+ " type(text   ) color(blue ) caps(off)
+ _ type(input  ) color(turq ) caps(on ) hilite(uscore)
+ | area(dynamic) extend(on) scroll(on)  /* required */
+ /* text 1 - 4 */
+ 14 type(dataout) color(turq  ) caps(off)
+ 15 type(dataout) color(green ) caps(off)
+ 16 type(dataout) color(blue  ) caps(off)
+ 17 type(dataout) color(white ) caps(off)
+)Body expand(\\) window(60,14)
++\ \+
+|pnlarea\ \|
+)Init
+)Proc
+ &presp = .resp
 )End
 ./ ADD NAME=CBTSEA#H
 )Attr default(#[_)
