@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.22'
+  ver = '1.27'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,14 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-04 LBD 1.27                                  |
+  |                     Tweak updated file desc (remove *)    |
+  |      2021-05-03 LBD 1.26                                  |
+  |                     Tweak initialization message          |
+  |      2021-05-03 LBD 1.25                                  |
+  |                     Clean up update files list on update  |
+  |      2021-05-02 LBD 1.24                                  |
+  |                     Add PARENT(CBTVIEW) to CBTSRCH call   |
   |      2021-05-01 LBD 1.23                                  |
   |                     Correct check for New display (N)     |
   |      2021-04-30 LBD 1.22                                  |
@@ -239,6 +247,13 @@ Do_Index:
   if load_info = null then
   load_info  = loadispf()
 
+  ms1 = 'The Official CBT ISPF Dialog is initializing.'
+  if update = 1
+     then ms2 = 'Checking www.cbttape.org for updates.'
+     else ms2 = null
+  ms3 = 'This should not take long.'
+  call do_popup
+
   if update = 1 then
   if ftp_ok = null then call check_ftp
 
@@ -253,6 +268,7 @@ Do_Index:
 
   /* Get list of updated files (if any) */
   check_update = 1
+  update_files = null
   call do_update
   check_update = 0
 
@@ -325,10 +341,11 @@ Do_Index:
     'tbsort' cbtdd 'fields(file,n,a)'
   end
 
-  if strip(update_files) /= null then do
+  if update_count > 0 then do
     zerrsm = 'Updates.'
     zerrlm = update_count 'updated files are available. Use the' ,
-      'Update command to retrieve them.'
+      'Update command to retrieve all updated files, or the U selection to' ,
+      'update selected files.'
     'setmsg msg(isrz003)'
   end
 
@@ -502,6 +519,8 @@ Do_Select:
         x = update_filennn(file)
         csel = null
         if csels = 1 then do
+          fp = wordpos(file,update_files)
+          update_files = delword(update_files,fp,2)
           zerrsm = 'Updated.'
           zerrlm = 'The requested file(s) has been updated with a clean' ,
             'copy from the CBTTape website.'
@@ -552,6 +571,7 @@ Do_ZCMD:
     if drc > 0 then return
   end
   if zopt /= null then zcmd = zcmd zopt
+
   Select
     When abbrev("ABOUT",word(zcmd,1),1) = 1 then call do_about
     When abbrev("CURRENT",word(zcmd,1),2) = 1 then do
@@ -579,7 +599,7 @@ Do_ZCMD:
     When abbrev('ESEARCH',translate(word(zcmd,1)),2) = 1 then do
       filesupd = update_files
       'vput (filesupd)'
-      x = cbtsrch('cbthlq('cbthlq')')
+      x = cbtsrch('parent(cbtview) cbthlq('cbthlq')')
       end
     When abbrev('NEW',translate(word(zcmd,1)),1) = 1 then
     call do_new
@@ -612,13 +632,22 @@ Do_ZCMD:
     call do_site
     When abbrev('ONLINE',translate(word(zcmd,1)),4) = 1 then
     call do_site
-    When abbrev('UPDATE',translate(word(zcmd,1)),3) = 1 then
-    if update = 1 then call do_update word(zcmd,2)
-    else do
+    When abbrev('UPDATE',translate(word(zcmd,1)),3) = 1 then do
+    if update = 1 then do
+       if update_count = 0 then do
+        zerrsm = 'Huh...'
+        zerrlm = 'The update count is zero' ,
+                 '- why are you trying to do an update?'
+        'setmsg msg(isrz003)'
+        end
+       else call do_update word(zcmd,2)
+       end
+    if update = 0 then do
       zerrsm = 'Not Allowed.'
       zerrlm = 'Update processing is not allowed based on the' ,
         'customization settings for this site.'
       'setmsg msg(isrz003)'
+    end
     end
     When abbrev('SORT',translate(word(zcmd,1)),2) = 1 then do
       field = word(zcmd,2)
@@ -677,6 +706,7 @@ Do_About:
   zerrlm = left('CBTTape® 'ver,73) ,
     left('Lionel B. Dyck',73) ,
     left('with John Kalinich',73) ,
+    left('and Willy Jensen',73) ,
     left('Copyleft - GNU GPL V3',73)
   'Setmsg msg(isrz003)'
   return
@@ -1487,6 +1517,8 @@ Do_Search:
         file = strip(file)
         if right(desc,2) = ' *' then
         desc = strip(substr(desc,1,length(desc)-2))
+        if right(desc,1) = '*' then
+        desc = strip(substr(desc,1,length(desc)-1))
         updates.file = strip(desc)
       end
     end
@@ -2822,7 +2854,7 @@ $t2      +Build:       @cbtinfo
   + type(text) intens(low) skip(on)
   @ type(output) intens(high) color(turq )
   ] type(output) caps(off) pas(on) intens(high) color(white) hilite(uscore)
-)Body Window(42,12)
+)Body Window(44,12)
 +Enter Command:_z           +
 +
 +Value for Find, Only, Search, and Sort:
@@ -2830,9 +2862,9 @@ $t2      +Build:       @cbtinfo
 +
  ]ds+       ]info+     ]only+     ]search+
  ]esearch+  ]find+     ]locate+   ]rebuild+
-]site+      ]history+  ]new+      ]refresh+
-]sort+      ]current+  ]overflow+ ]update+
-]about+
+ ]site+     ]history+  ]new+      ]refresh+
+ ]sort+     ]current+  ]overflow+ ]update+
+ ]about+
            +Or%F3+to cancel.
 )Init
  &zwinttl = 'CBT Command Options'
@@ -2880,7 +2912,7 @@ if resp = 'END' then exit
      ver (&zopt,nb)
 )PNTS
  FIELD(ds       ) VAR(zcmd) VAL('DS      ')
- FIELD(es       ) VAR(zcmd) VAL('ES      ')
+ FIELD(esearch  ) VAR(zcmd) VAL('ES      ')
  FIELD(About    ) VAR(zcmd) VAL('ABOUT   ')
  FIELD(Find     ) VAR(zcmd) VAL('FIND    ')
  FIELD(History  ) VAR(zcmd) VAL('HISTORY ')

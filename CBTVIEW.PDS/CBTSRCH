@@ -42,18 +42,23 @@
                   Retain line command in case of error.
                   New command List AVailable.
                   Fix RFIND pfk issue
+                  New parameter PARENT(parent-name)
+                  Hilight search results
+                  Primary command popup.
+  007 2021-05-03  Slight change to primary command popup.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='006.5 2021-05-02'
+ cbtsver='007.1 2021-05-03'
  /* handle parameters */
  arg p
  parse value ' 'p  with p1 'CBTHLQ(' cbthlq ')' p2
  parse value p1 p2 with p1 'CBTSUF(' cbtsuf ')' p2
  parse value p1 p2 with p1 'TEST(' test ')' p2
+ parse value p1 p2 with p1 'PARENT(' parent ')' p2     /* parent's name */
  if p1 p2<>'' then exit xmsg('Invalid parm:' space(p1 p2))
 
  /* global definitions */
@@ -63,7 +68,7 @@
  $trace=0
  pipe=0
  parse value '' with ddlist sysindd sysprtdd wrklibdd rfindpfk rfindpfs,
-       filesupd
+       filesupd pcslist
 
  /* get started */
  parse value '' with dsnl. dsns.
@@ -342,35 +347,45 @@ LcFetchE:
 
  /*                   primary command handler                        */
 PCmd: /* parm = panel line pos, panel line nr */
- parse var zcmd pcvrb pcdata
- Select
-   when Abbrev('SEARCH',pcvrb,1) then return PcSearch()
-   when Abbrev('LIST',pcvrb,1) then return PcList()
-   when Abbrev('NUMBER',pcvrb,1) then Return PcNumber()
-   when Abbrev('FIND',pcvrb,1) then Return PcFind()
-   when Abbrev('RFIND',zcmd,2) then Return PcFind()
-   when Abbrev('RESET',zcmd,3) then return Reset()+1
-   when Abbrev('CBTVIEW',zcmd,4) | zcmd='CV' then Return RunExt("CBTVIEW")
-   when Abbrev('VIEW',zcmd,1) then Return RunExt("CBTVIEW")
-   when Abbrev('DSNLIST',zcmd,1) then Return DsnList()
-   when Abbrev('VERSION',zcmd,3) then return lmsg('Version' cbtsver)
-   when pcvrb='SL' then do
-     cc=PcSearch()
-     pcdata=''
-     return PcList()
-   end
-   when pcvrb='IF' then Return PcFilter(pcdata)
-   when zcmd ='F1' then ,
-     return XISP("view dataset('"GetDsn(1)"')")
-   when pcvrb='SET'  then do
-     parse var pcdata v .'=' d
-     if d='' then return lmsg('invalid format')+1
-     zz=value(v,strip(d))
-     return lmsg('Value for' v 'is now' value(v))
-   end
-   when pcvrb='ZL' then zz=RexxGblv('rlist var('pcdata')')
-   when zcmd  ='TEST' then say 'Prompt:' PPrompt('Just;  testing','y')
-   otherwise return lmsg('Invalid command')+1
+ Do forever
+   parse var zcmd pcvrb pcdata
+   Select
+     when Abbrev('SEARCH',pcvrb,1) then return PcSearch()
+     when Abbrev('LIST',pcvrb,1) then return PcList()
+     when Abbrev('NUMBER',pcvrb,1) then Return PcNumber()
+     when Abbrev('FIND',pcvrb,1) then Return PcFind()
+     when Abbrev('RFIND',zcmd,2) then Return PcFind()
+     when Abbrev('RESET',zcmd,3) then return Reset()+1
+     when (Abbrev('CBTVIEW',zcmd,4) | zcmd='CV') & parent='CBTVIEW' then,
+       return lmsg('Cannot invoke own caller')
+     when Abbrev('CBTVIEW',zcmd,4) | zcmd='CV' then Return RunExt("CBTVIEW")
+     when Abbrev('VIEW',zcmd,1) then Return RunExt("CBTVIEW")
+     when Abbrev('DSNLIST',zcmd,1) then Return DsnList()
+     when Abbrev('VERSION',zcmd,3) then return lmsg('Version' cbtsver)
+     when pcvrb='SL' then do
+       cc=PcSearch()
+       pcdata=''
+       return PcList()
+     end
+     when pcvrb='IF' then Return PcFilter(pcdata)
+     when zcmd ='F1' then ,
+       return XISP("view dataset('"GetDsn(1)"')")
+     when pcvrb='SET'  then do
+       parse var pcdata v .'=' d
+       if d='' then return lmsg('invalid format')+1
+       zz=value(v,strip(d))
+       return lmsg('Value for' v 'is now' value(v))
+     end
+     when pcvrb='ZL' then zz=RexxGblv('rlist var('pcdata')')
+     when zcmd  ='/' then do
+       p=PcPopup()
+       if p='' | datatype(p)='NUM' then return 0
+       zcmd=p
+     end
+     when zcmd  ='TEST' then ,
+       return xmsg('Prompt:' PPrompt('Just;  testing','y'))
+     otherwise return lmsg('Invalid command')+1
+   End
  End
  Return 0
 
@@ -516,6 +531,7 @@ PcSearch:
    if p>0 then test=insert(' ',test,p-1)
  end
  tx=''
+ pcslist=''
  do while test<>''
    test=strip(test)
    select
@@ -535,6 +551,7 @@ PcSearch:
      otherwise do
        if pos(right(tx,1),'(&|')=0 then tx=tx '&'
        tx=tx "pos('"word(test,1)"',slst.n)>0"
+       pcslist=pcslist word(test,1)
        test=subword(test,2)
      end
    end
@@ -551,7 +568,7 @@ PcSearch:
  drop idad.
  do n=1 to list.0
    q=left(list.n,4)
-   if \sel.q then iterate
+   if \sel.q then iterate                            /* copy selected files */
    c=idaat1
    if substr(list.n,5,5)='*FILE' then c=idaai1
    parse value dn+1 c' 'idaat3''substr(list.n,6) with dn idad.dn
@@ -559,12 +576,34 @@ PcSearch:
      cbtn=left(list.n,4)
      idad.dn=overlay(dsns.cbtn,idad.dn,80,1)                  /* Available */
    end
+   /* highlite select words */
+   do pln=1 to words(pcslist)
+     plw=word(pcslist,pln)
+     pll=length(plw)
+     plp=0
+     do forever
+       plp=pos(plw,translate(idad.dn),plp+1)
+       if plp=0 then leave
+       idad.dn=overlay(idaatg,idad.dn,plp-1)
+       idad.dn=overlay(idaatb,idad.dn,plp+pll)
+     end
+   end
  end
  idad.0=dn
  idatop=1
  return Lmsg(seln 'files found')
  return 0
  Return PcList() + lmsg(seln 'files found')
+
+PcPopup:  /* popup command selector*/
+ parse value '' with zcmd pcpcmd psel
+ address ispexec "addpop"
+ address ispexec "display panel(CBTSCMDP)"
+ cc=rc
+ address ispexec "rempop"
+ if cc>8 then return lmsg('Panel error rc' cc zerrlm)
+ if cc>0 then return 0
+ return pcpcmd
 
 GetField:
  arg gfn,gff                      /* data rec#, fieldname */
@@ -923,6 +962,8 @@ DoAlloc:
 [ SL p      !Seach for words p then show overview. This is a combination of
 !            the SEARCH and LIST commands.
 [
+[ /         !Popup panel helping with issuing primary commands.
+[
 #Line commands
 !
 [ F         !Fetch the file from the CBT website and store it locally, using
@@ -948,6 +989,56 @@ DoAlloc:
 !is a available in order to use the Fetch line command.
 )Init
 )Proc
+)End
+./ ADD NAME=CBTSCMDP
+)Attr
+ + type(text   ) color(green) caps(off)
+ " type(text   ) color(blue ) caps(off)
+ _ type(input  ) color(turq ) caps(on ) hilite(uscore)
+)Body expand(\\) width(80)
+% \ \Build primary command\ \ +
+%ISPF cmd ==>_zcmd \ \+ +Scrl_scrl+
++
+_z +Select command by number below or fill in text where possible.
++
+% 1+CBTView       "Start the CBTVIEW command.
+% 2+DSnlist       "List datasets using ISPF 3.4
+% 3+Find t (d)    _pfind\ \+  +
+%                 "Find text 't' from current location, d='FIRST or 'LAST'.
+% 4+List p        _plist      +
+%                 "null, All, AVailable
+% 5+Number n      _pnum+
+%                 "Locate file n.
+% 6+Search p      _psearch\ \+ +
+%                 "Search for string(s) s1 .. sn.
+% 7+SL p          _psearchl\ \+ +
+%                 "Seach for words p then show overview.
+)Init
+ .zvars = '(psel)'
+ &psel     = &Z
+ &pfind    = &Z
+ &plist    = &Z
+ &pnum     = &Z
+ &psearch  = &Z
+ &psearchl = &Z
+)Proc
+ ver (&psel,range,1,7)
+ if (&psel = 1) &pcpcmd = 'CBTVIEW'
+ if (&psel = 2) &pcpcmd = 'DSNLIST'
+ if (&psel = 3 OR &pfind NE &Z)
+   ver (&pcpcmd,nb)
+   &pcpcmd = 'FIND &pfind'
+ if (&psel = 4 OR &plist NE &Z)
+   &pcpcmd = 'LIST &plist'
+ if (&psel = 5 OR &pnum NE &Z)
+   ver (&pnum,nb,num)
+   &pcpcmd = 'NUMBER &pnum'
+ if (&psel = 6 OR &psearch NE &Z)
+   ver (&psearch,nb)
+   &pcpcmd = 'SEARCH &psearch'
+ if (&psel = 7 OR &psearchl NE &Z)
+   ver (&psearchl,nb)
+  &pcpcmd = 'SL &psearchl'
 )End
 ./ ENDUP
  */
