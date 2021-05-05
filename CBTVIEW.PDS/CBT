@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.27'
+  ver = '1.28'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-04 JK  1.28                                  |
+  |                     Add messages tutorial panel           |
   |      2021-05-04 LBD 1.27                                  |
   |                     Tweak updated file desc (remove *)    |
   |      2021-05-03 LBD 1.26                                  |
@@ -2542,7 +2544,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +    %1+Primary commands
 +    %2+Individual file commands
 +    %3+Application overview
-+
++    %4+CBTTape® messages
 +
 )Init
  &zup = CBTH
@@ -2552,6 +2554,7 @@ $z+]file @desc                                                  ]z[z@fdate
            1,cbth1
            2,cbth2
            3,cbth3
+           4,cbth4
             *,'?'
             )
 )End
@@ -2583,7 +2586,7 @@ $z+]file @desc                                                  ]z[z@fdate
 `for the mainframe community.
 )Init
  &zup = CBTH2
- &zcont = CBTH
+ &zcont = CBTH4
 )Proc
 )End
 >Panel CBTH1
@@ -2679,6 +2682,121 @@ $z+]file @desc                                                  ]z[z@fdate
 )Init
  &zup = CBTH1
  &zcont = CBTH3
+)Proc
+)End
+>Panel CBTH4
+)Attr Default(%+_)
+   ` area(SCRL) Extend(ON)
+   ¢ type(text) intens(high) color(yellow)
+)Body expand(\\)
+%Tutorial+-\-\%The Official CBT ISPF Application+-\-\%Tutorial
+%Command ===>_zcmd
++
+¢CBTTape® Messages+                                               %Up F10 Dn F11
+`sam --------------------------------------------------------------------------`
+)Area Sam
+   %Canceled.     +
+      Rebuild canceled.
+   %Canceled.     +
+      File FTP request canceled.
+   %Canceled.     +
+      CBTTape Update request canceled.
+   %Canceled.     +
+      Copy canceled.
+   %Copied.       +
+      DSN has been copied to NEWDSN.
+   %Error.        +
+      Sort requires a column name (File or Date), with
+      an optional direction (A or D).
+   %Error.        +
+      Find requires a string (e.g. F VSAM).
+   %Error.        +
+      Only requires a string (e.g. O VSAM).
+   %Error.        +
+      Locate requires a file-number (e.g. L 43).
+   %Error.        +
+      The extraction of the unzip utility failed and will
+      prevent downloads until that is fixed. We suspect the
+      problem is that the unzip member of FILEIDX.PDS is
+      either missing or corrupt.
+   %Error.        +
+      From and To may not be the same dataset name.
+   %Fatal.        +
+      CBT FILE/COV001.DATA is not available under cbthlq
+      and was not able to be downloaded via FTP from
+      www.cbttape.org possibly due to a firewall preventing
+      FTP from accessing the site.
+   %Found.        +
+      Found in row:  xxx.
+   %Found.        +
+      File nnn was found in row xxx.
+   %Huh...        +
+      The update count is zero - why are you trying to do an update?
+   %xxx Hits.     +
+      String found in xxx files.
+   %Ignored.      +
+      The OVERFLOW command request has been ignored since
+      you are already in the Overflow files.
+   %Ignored.      +
+      The CURrent command request has been ignored since
+      you are already in the Current CBT files.
+   %Invalid.      +
+      The PDS command is not available.
+   %Invalid.      +
+      The REVIEW command is not available.
+   %Invalid.      +
+      Search requires a search string...
+   %Missing.      +
+      Member xxx does not exist for this file.
+   %No Update.    +
+      Update is disabled for this site.
+   %Not Available.+
+      File xxx is not available and FTP is not enabled.
+   %Not Allowed.  +
+      Update processing is not allowed based on the
+      customization settings for this site.
+   %Not Found.    +
+      Find string not found in any record. Try again.
+   %Not Found.    +
+      File nnn was not found.
+   %Not Found.    +
+      File was not found at www.cbttape.org.
+   %No Updates.   +
+      There have been no updates since the last update.
+   %Rebuild.      +
+      Index has been created/recreated.
+   %Refreshed.    +
+      Refresh completed and all CBT Index entries are
+      now displayed.
+   %Unknown.      +
+      Command is not a registered command. Check the tutorial
+      for the available commands.
+   %Updated.      +
+      xxx files were updated.
+   %Updated.      +
+      xxx datasets were renamed.
+   %Updated.      +
+      The requested file(s) has been updated with a clean
+      copy from the CBTTape website.
+   %Updated.      +
+      The previous dataset was renamed.
+   %Updates.      +
+      xxx updated files are available. Use the
+      Update command to retrieve all updated files, or the
+      U selection to update selected files.
+   %Warning.      +
+      The unzip utility is not available so the download
+      was not performed.
+   %Warning.      +
+      FTP to www.cbttape.org is not working. This may be a
+      problem with your local system or the site may be down.
+      Downloads are being disabled for this session.
+      If this is permanent then change the CBTCONFG to update=0.
+   %Wrapped.      +
+      Find restarted at the top of the table.
+)Init
+ &zup = CBTH3
+ &zcont = CBTH
 )Proc
 )End
 >Panel CBTCOPY
