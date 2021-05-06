@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.28'
+  ver = '1.29'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-06 LBD 1.29                                  |
+  |                     Make FWFRIENDLY the default           |
   |      2021-05-04 JK  1.28                                  |
   |                     Add messages tutorial panel           |
   |      2021-05-04 LBD 1.27                                  |
@@ -1328,9 +1330,7 @@ Do_Search:
     call add_ftp sysvar('sysuid')'@mail.com'
     if wcf_opt = 'FTP' then
     call add_ftp 'bin'
-    /* Comment Start
     call add_ftp 'locsite fwfriendly'
-    Comment End */
     call add_ftp 'cd pub'
     if wcf_opt = 'FTP'
     then do
@@ -2720,7 +2720,7 @@ $z+]file @desc                                                  ]z[z@fdate
       problem is that the unzip member of FILEIDX.PDS is
       either missing or corrupt.
    %Error.        +
-      From and To may not be the same dataset name.
+      Copy From and To may not be the same dataset name.
    %Fatal.        +
       CBT FILE/COV001.DATA is not available under cbthlq
       and was not able to be downloaded via FTP from
@@ -2819,7 +2819,7 @@ $z+]file @desc                                                  ]z[z@fdate
   parse value '' with zerrsm zerrlm
   if dsn = newdsn then do
      zerrsm = 'Error.'
-     zerrlm = 'From and To may not be the same dataset name.'
+     zerrlm = 'Copy From and To may not be the same dataset name.'
      end
   if zerrsm = '' then do
      x = listdsi(dsn)
@@ -2827,7 +2827,7 @@ $z+]file @desc                                                  ]z[z@fdate
      x = listdsi(newdsn)
      if from = sysdsname then do
          zerrsm = 'Error.'
-         zerrlm = 'From and To may not be the same dataset name.'
+         zerrlm = 'Copy From and To may not be the same dataset name.'
         end
      end
 *endrexx
