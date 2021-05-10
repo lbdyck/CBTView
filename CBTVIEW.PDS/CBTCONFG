@@ -41,3 +41,9 @@
 *          leave commented out to allow SMS to position
 *
 *volser = CBT006
+*
+*
+* backup = 0 Do NOT create backup files when a file is updated
+*        = 1 Create .Dyymmdd backup files when a file is updated
+*
+*backup = 1

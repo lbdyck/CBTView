@@ -26,6 +26,8 @@
   | Author:    Lionel B. Dyck                                  |
   |                                                            |
   | History:  (most recent on top)                             |
+  |            2021/05/09 LBD - Enable FWFRIENDLY (PASV) FTP   |
+  |                           - change file # handling +0      |
   |            2021/05/01 LBD - Correction for Updates         |
   |            2021/04/30 LBD - Enable option U                |
   |                           - add return code                |
@@ -104,6 +106,7 @@
     erc  = get_files()
   end
   else do
+    file = file + 0
     if length(file) < 3 then file = right(file+1000,3)
     erc  = get_files()
   end
@@ -203,9 +206,7 @@ Write_Command_File:
   call add_ftp 'anonymous'
   call add_ftp sysvar('sysuid')'@mail.com'
   call add_ftp 'bin'
-  /* Comment Start
   call add_ftp 'locsite fwfriendly'
-  Comment End */
   call add_ftp 'cd pub'
   if opt = 'U'
   then call add_ftp 'cd updates'

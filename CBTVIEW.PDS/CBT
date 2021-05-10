@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.29'
+  ver = '1.32'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,15 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-10 LBD 1.32                                  |
+  |                     Update ABOUT message                  |
+  |                     Clean up Command popup menu process   |
+  |                     Add new BACKUP option to prevent      |
+  |                       or allow (default) backups on update|
+  |      2021-05-08 LBD 1.31                                  |
+  |                     Fix FILEnnnn member residuals         |
+  |      2021-05-07 LBD 1.30                                  |
+  |                     Bug fix on selection U (random)       |
   |      2021-05-06 LBD 1.29                                  |
   |                     Make FWFRIENDLY the default           |
   |      2021-05-04 JK  1.28                                  |
@@ -191,10 +200,14 @@
   | pds    = 0 PDS command not available                 |
   |        = 1 PDS command is available                  |
   |                                                      |
-  |  review = 0 Review command not available             |
-  |         = 1 Review command is available              |
+  | review = 0 Review command not available              |
+  |        = 1 Review command is available               |
+  |                                                      |
+  | backup = 0 do NOT create backup files for updates    |
+  |        = 1 Create backup files for updated .Dyymmdd  |
   * ---------------------------------------------------- */
   action  = 'I'
+  backup  = '1'
   sysout  = 'Z'
   update  =  1
   pds     =  1
@@ -455,6 +468,8 @@ Check_Overrides:
       update = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'VOLSER' then
       volser = word(ovr.i,3)
+      When translate(word(ovr.i,1)) = 'BACKUP' then
+      backup = word(ovr.i,3)
       Otherwise nop
     End
   end
@@ -522,9 +537,10 @@ Do_Select:
         call get_dsn
         x = update_filennn(file)
         csel = null
+        fp = wordpos(file,update_files)
+        if fp > 0 then
+        update_files = delword(update_files,fp,2)
         if csels = 1 then do
-          fp = wordpos(file,update_files)
-          update_files = delword(update_files,fp,2)
           zerrsm = 'Updated.'
           zerrlm = 'The requested file(s) has been updated with a clean' ,
             'copy from the CBTTape website.'
@@ -568,7 +584,7 @@ Do_Select:
 Do_ZCMD:
   if zcmd = '/' then do
     'Addpop'
-    parse value '' with zcmd zopt
+    parse value '' with zcmd zopt tzcmd
     'Display panel(cbtcmd)'
     drc = rc
     'Rempop'
@@ -710,8 +726,9 @@ Do_About:
   zerrlm = left('CBTTape® 'ver,73) ,
     left('Lionel B. Dyck',73) ,
     left('with John Kalinich',73) ,
-    left('and Willy Jensen',73) ,
-    left('Copyleft - GNU GPL V3',73)
+    left('and Willy Jensen - CBTSRCH',73) ,
+    left('Copyleft - GNU GPL V3',73) ,
+    left('Dedicated to Arnie Casinghino',73)
   'Setmsg msg(isrz003)'
   return
 
@@ -877,6 +894,9 @@ Do_Info:
   if review = 1
   then cbtr = 'Yes'
   else cbtr = 'No'
+  if backup = 0
+  then cbtbkup = 'No'
+  else cbtbkup = 'Yes'
   'vput (title) shared'
   'Addpop Row(2) Column(5)'
   'Display Panel(cbtinfo)'
@@ -1288,15 +1308,20 @@ Do_Search:
     /* ----------------------------------------------------------------- *
     | Rename the existing dataset with it's creation date               |
     * ----------------------------------------------------------------- */
-  Del_Rename: procedure expose renamec
+  Del_Rename: procedure expose renamec backup
     arg rename_dsn
     renamec = renamec + 1
     call outtrap 'x.'
+    if backup = 0 then do
+       'delete' "'"rename_dsn"'"
+       end
+   else do
     x = listdsi("'"rename_dsn"'")
     dt = right(date('s',substr(syscreate,3,2)''right(syscreate,3),'j'),6)
     new_dsn = rename_dsn'.D'dt
     'rename' "'"rename_dsn"'  '"new_dsn"'"
     call outtrap 'off'
+    end
     return 0
 
     /* ------------------------ *
@@ -1652,6 +1677,7 @@ Do_Search:
     'alloc f('udd') shr reuse ds('output')'
     'execio * diskw' udd '(finis stem inp.'
     'Free f('udd')'
+    drop inp.
     if save_addr = 'TSO' then return 0
     Address ISPExec
     return 0
@@ -2896,7 +2922,7 @@ if (&zerrsm EQ &Z)
 )Attr
  @ type(output) caps(off) intens(low) color(turq)
  $ type(output) caps(off) intens(low) color(blue)
-)Body Window(60,12)
+)Body Window(60,13)
 +
 $t1      +Dataset:     @cbtidx
 $t2      +Build:       @cbtinfo
@@ -2905,6 +2931,7 @@ $t2      +Build:       @cbtinfo
 +Available Updates:    @cbtup
 +Default S Action:     @ispfact
 +Update Allowed:       @cbtu
++Create Backups:       @cbtbkup
 +RECEIVE SYSOUT class: @sysout
 +PDS Command:          @cbtp
 +Review Command:       @cbtr
@@ -3010,15 +3037,19 @@ $t2      +Build:       @cbtinfo
  &resp = .resp
 *Rexx(* tzcmd resp)
 if resp = 'END' then exit
-  tzcmd = ''
+  if zcmd /= '' then
   Select
     When left(zcmd,1) = 'F' then tzcmd = 'FIND'
     When left(zcmd,1) = 'S' then tzcmd = 'SORT'
     When left(zcmd,1) = 'L' then tzcmd = 'LOCATE'
     When left(zcmd,2) /= 'OV' then
     if left(zcmd,1) = 'O' then tzcmd = 'ONLY'
-     Otherwise nop
-     end
+    Otherwise tzcmd = ''
+    end
+if zcmd = ''
+   then if tzcmd /= ''
+      then if zopt /= ''
+         then zcmd = tzcmd zopt
 *EndRexx
  if (&tzcmd = FIND)
      ver (&zopt,nb)
@@ -3028,6 +3059,8 @@ if resp = 'END' then exit
      ver (&zopt,nb)
  if (&tzcmd = SORT)
      ver (&zopt,nb)
+ if (&zopt NE &Z)
+     ver (&zcmd,nb)
 )PNTS
  FIELD(ds       ) VAR(zcmd) VAL('DS      ')
  FIELD(esearch  ) VAR(zcmd) VAL('ES      ')

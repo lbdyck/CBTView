@@ -49,25 +49,30 @@
                   Fix lcmd select field reset issue.
   008 2021-05-04  Popups during initialization.
                   Drop optional use of PIPE.
+  009 2021-05-07  Major rewrite aimed at performance:
+                   20% decrease in load time
+                   60000+ fewer variables leading to 2/3 saving in storage
+  010 2021-05-09  New command List Data.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='008.2 2021-05-04'
+ cbtsver='010.1 2021-05-09'
  Address ispexec "control errors return"
+ "delstack"
 
  /* handle parameters */
  arg p
  parse value ' 'p  with p1 'CBTHLQ(' cbthlq ')' p2
  parse value p1 p2 with p1 'CBTSUF(' cbtsuf ')' p2
  parse value p1 p2 with p1 'TRACE(' trace ')' p2
- parse value p1 p2 with p1 'PARENT(' parent ')' p2     /* parent's name */
+ parse value p1 p2 with p1 'PARENT(' $parent ')' p2    /* parent's name */
  if p1 p2<>'' then exit xmsg('Invalid parm:' space(p1 p2))
 
  /* global definitions */
- if cbthlq = '' then cbthlq='CBT.V501'
+ if cbthlq = '' then exit xmsg('Parm CBTHLQ is required')+8
  if cbtsuf = '' then cbtsuf='PDS DATA'
  upper cbthlq cbtsuf                      /* just in case                    */
  $trace=(trace='Y')
@@ -75,14 +80,15 @@
  idadeffld = 'TEXT'                            /* default name for sort etc */
  Address Ispexec
  "vget (zscrmaxd zscrmaxw) shared"
- parse value 'CBTSEA#L' with idapanel ddlist sysindd sysprtdd wrklibdd,
-   rfindpfk rfindpfsfilesupd pcslist
+ parse value 'CBTSEA#L' '\'   with idapanel $dlm ddlist sysindd sysprtdd,
+   wrklibdd rfindpfk rfindpfsfilesupd srchlst
  parse value 80       zscrmaxd 1       0        'ZCMD',
         with idascrwt idascrdp idatop idacsrp idacsrf idad. .
  parse value xrange('11'x,'17'x) with idaai1 +1 idaai2 +1 idaai3 ,
         +1 idaat1 +1 idaat2 +1 idaat3 +1 idaat4 .
  parse value idaat1 idaat2 idaat3 idaat4 ,
         with idaatt idaatg idaatb idaatw
+ parse value copies('0 ',50) with f. d. .
 
  /* get started */
  parse value '' with dsnl. dsns.
@@ -113,7 +119,7 @@
    zz=Value('IDAF.'n,p+1 l)
    p=p+l+1                       /* pos of next attr       */
  end
- pnltexth=left('S Text',78)'A'
+ pnltexth=left('S File Text',78)'A'
  idafalll=p-1                    /* total length           */
 
  /* Controller     */
@@ -127,6 +133,8 @@
  queue  ''
  queue  'CBTHLQ value    'idaat2 cbthlq
  queue  'CBTSUF value    'idaat2 cbtsuf
+ if $parent<>'' then,
+ queue  'Parent          'idaat2 $parent
  queue  ''
  queue  '# Datasets found'idaat2 dsnl.0
  idad.0 =queued()
@@ -283,11 +291,9 @@ LCmd:                          /* linecmd, pnlline nr, dataline nr */
  arg lcmd,lcline,lcpln,lcdln
  Select
    when lcmd='S'  then do
-     do n=lcdln to 1 by -1 until left(idad.n,1)<idaat1
-     end
-     r =translate(idad.n,' ',xrange('11'x,'17'x))
-     fn=right(word(substr(r,8),1),4,0)
-     if dsns.fn='' then return lmsg('File' fn 'is not available')+1
+     cbtn=substr(idad.lcdln,4,4)
+     fn=cbtn+0
+     if dsns.fn='' then return lmsg('File' cbtn 'is not available')+1
      lcds=GetDsn(fn)
      cc=Listdsi("'"lcds"'")
      if sysdsorg='PS' then Return IspAcc('view' lcds)
@@ -302,23 +308,24 @@ LCmd:                          /* linecmd, pnlline nr, dataline nr */
  else           return SetField(lcdln,'sel',lcmd,idaai3)
 
 LcList:
- do n=lcdln+1 to idad.0
-   if substr(idad.n,4,4)='FILE' then leave
-   if left(idad.n,1)='-' then idad.n=overlay(idaat3,idad.n)
-   else idad.n=overlay('-',idad.n)
- end
- Return 0
+ fn=lcdln
+ fn=substr(idad.lcdln,4,4)+0
+ n=lcdln+1
+ d.fn=(left(idad.n,1)<idaat1)                         /* set data flag  */
+ Return MkPnlbase()
 
 LcFetch:
+ if $parent<>'CBTVIEW' then return lmsg('Parent is not CBTVIEW')
  Signal on error name LcFetchE
- parse var idad.lcdln . 'FILE'cbtn .
- ds=GetDsn(cbtn)
+ cbtn=substr(idad.lcdln,4,4)
+ ds=GetDsn(cbtn+0)
  if ds<>'' then Call Xtso "DEL '"ds"'"
  zz=outtrap('lst.')
- /*=cbtdown(space(cbthlq cbtn) 'U')*/                                  /*005.1*/
  if wordpos(cbtn,filesupd) > 0 then cbtup = 'U'                        /*005.1*/
  else cbtup = '   '                                                    /*005.1*/
- cc=cbtdown(space(cbthlq cbtn) cbtup)                                  /*005.1*/
+ n=right(cbtn+0,3,0)                                         /* circumvention */
+ if n>999 then n='0'n                                        /* circumvention */
+ cc=cbtdown(space(cbthlq cbtn+0) cbtup)                                /*005.1*/
  zz=outtrap('off')
  if cc<>0 then do
    say 'CBTDOWN error..'
@@ -328,11 +335,10 @@ LcFetch:
    return 8
  end
  cc=GetDsnList()     /* refresh */
- ds=GetDsn(cbtn)
+ ds=GetDsn(cbtn+0)
  if sysdsn("'"ds"'")<>'OK' then return lmsg('Fetch' cbtn 'failed')+8
- trace off
- cbtn=right(cbtn,4,0)
- dsns.cbtn='*'
+ n=cbtn+0
+ dsns.n='*'
  idad.lcdln=overlay('*',idad.lcdln,80,1)
  zz=SetField(pnldln,'sel',' ','i1')                     /* clear select field */
  Return lmsg('File' cbtn 'fetched')
@@ -345,13 +351,13 @@ PCmd: /* parm = panel line pos, panel line nr */
  Do forever
    parse var zcmd pcvrb pcdata
    Select
+     when zcmd ='F1' then return XISP("view dataset('"GetDsn(1)"')")
      when Abbrev('SEARCH',pcvrb,1) then return PcSearch()
      when Abbrev('LIST',pcvrb,1) then return PcList()
      when Abbrev('NUMBER',pcvrb,1) then Return PcNumber()
      when Abbrev('FIND',pcvrb,1) then Return PcFind()
      when Abbrev('RFIND',zcmd,2) then Return PcFind()
-     when Abbrev('RESET',zcmd,3) then return Reset()+1
-     when (Abbrev('CBTVIEW',zcmd,4) | zcmd='CV') & parent='CBTVIEW' then,
+     when (Abbrev('CBTVIEW',zcmd,4) | zcmd='CV') & $parent='CBTVIEW' then,
        return lmsg('Cannot invoke own caller')
      when Abbrev('CBTVIEW',zcmd,4) | zcmd='CV' then Return RunExt("CBTVIEW")
      when Abbrev('VIEW',zcmd,1) then Return RunExt("CBTVIEW")
@@ -362,16 +368,15 @@ PCmd: /* parm = panel line pos, panel line nr */
        pcdata=''
        return PcList()
      end
-     when pcvrb='IF' then Return PcFilter(pcdata)
-     when zcmd ='F1' then ,
-       return XISP("view dataset('"GetDsn(1)"')")
+     when zcmd ='LA'   then Return PcList('ALL')
+     when zcmd ='LAV'  then Return PcList('AVAILABLE')
      when pcvrb='SET'  then do
        parse var pcdata v .'=' d
        if d='' then return lmsg('invalid format')+1
        zz=value(v,strip(d))
        return lmsg('Value for' v 'is now' value(v))
      end
-     when pcvrb='ZL' then zz=RexxGblv('rlist var('pcdata')')
+     when pcvrb='LV' then zz=RexxGblv('rlist var('pcdata')')
      when zcmd  ='/' then do
        p=PcPopup()
        if p='' | datatype(p)='NUM' then return 0
@@ -381,30 +386,15 @@ PCmd: /* parm = panel line pos, panel line nr */
        return xmsg('Prompt:' PPrompt('Just','testing'))
      when zcmd  ='TEST2' then ,
        return xmsg('Prompt:' PPrompt('Yet','more','testing','oc'))
-     when zcmd  ='OPTL' then do
-       address ispexec "vget cbtsrch0 profile"
-       return lmsg('opts:' cbtsrch0)
-     end
-     when zcmd  ='OPTX' then do
-       cbtsrch0=''
-       address ispexec "vput cbtsrch0 profile"
-       return lmsg('opts cleared')
-     end
      otherwise return lmsg('Invalid command')+1
    End
  End
  Return 0
 
 PcNumber:  /* set display at name         */
- if pcdata='' then do   /* next */
-   do n=idatop+1 to idad.0 until left(idad.n,1)<idaat1
-   end
-   idatop=n
-   return 0
- end
  if datatype(pcdata)<>'NUM' then return lmsg('Missing number')+1
- ls='FILE'right(pcdata,4)
- do n=1 to idad.0 until substr(idad.n,4,8)=ls
+ ls=right(pcdata,4)
+ do n=1 to idad.0 until substr(idad.n,4,4)=ls
  end
  if n<idad.0 then idatop=n
  else call lmsg 'not found'
@@ -435,92 +425,27 @@ PcFind:    /* set display at line containing text */
  end
  return lmsg(pcdata 'not found')
 
-PcFilter:  /* filter on conditional value */
-           /* analyze expression like date1>2020 */
- signal on error  name PcFilterE
- signal on syntax name PcFilterE
- arg fltprm
- fltp=Verify(fltprm' ','=<>\/','m')
- parse var fltprm fltvrb =(fltp) flts
- fltp   =Verify(flts' ','=<>\/','n')
- parse var flts fltcnd =(fltp) fltval
- if fltcnd='\' then fltcnd='<>'
- fltvrb =strip(fltvrb)
- fltval =strip(fltval)
- fltvall=length(fltval)
- parse var idaf.fltvrb fltpos fltlen
- if Verify(fltval,'*%','m')>0 then do     /* using mask, require pgm RXPATTRN */
-   drop r. /* just in case */
-   cc=RxPattrn('stem(idad.) pos('fltpos') len('fltlen') mask('fltval')',
-      'rstem(r.)')
-   /* 'mchr('idaai1') nchr(-)')  */
-   do n=1 to idad.0
-     if left(idad.n,1)>idaai3 then iterate
-     if r.n='M' then idad.n=overlay(idaai1,idad.n)
-     else idad.n=overlay('-',idad.n)
-   end
-   drop r.
-   idatop=1
-   return 0
- end
- if fltcnd='/' then fltt="pos('"fltval"',substr(idad.n,"fltpos","fltlen"))>0"
- else fltt="substr(idad.n,"fltpos","fltvall")"fltcnd"'"fltval"'"
- Interpret ,      /* the whole loop is interpreted due to performance */
-       "do n=1 to idad.0;",
-         "if left(idad.n,1)>idaai3 then iterate;",          /* non-selectable */
-         "if" fltt "then idad.n=overlay(idaai1,idad.n);",   /* show line      */
-         "else idad.n=overlay('-',idad.n);",                /* hide line      */
-       "end;"
- idatop=1
- return 0
-PcFilterE:
- Return lmsg('Error' rc '-' Errortext(rc))+1
-
-ResetCmd: zcmd='';return 0
-
-Reset:   /* make all rows visible, clear selection */
- do n=1 to idad.0
-   if left(idad.n,1)='-' then idad.n=overlay(idaat3,idad.n)
- end
- parse value 0 1 with d0hidn idatop zcmd
- return 0
-
 PcList:  /* show only headers */
+ pcld=translate(word(arg(1) pcdata,1))
  Select
-   when pcdata='' then do n=1 to idad.0
-     if left(idad.n,1)>idaai3 then idad.n=overlay('-',idad.n)
-   end
-   when Abbrev('ALL',pcdata,1) | pcdata='*' then do
-     dn=0
-     drop idad.
-     do n=1 to list.0
-       parse value dn+1 '- 'idaat3''substr(list.n,6) with dn idad.dn
-       if substr(list.n,5,5)='*FILE' then do
-         idad.dn=overlay(idaai1,idad.dn)
-         cbtn=left(list.n,4)
-         idad.dn=overlay(dsns.cbtn,idad.dn,80,1)
-       end
+   when pcld='' then d.=0                             /* supress all data */
+   when Abbrev('ALL',pcld,1) | pcld='*' then,         /* show all headers */
+     parse value '1 0' with f. d.
+   when Abbrev('DATA',pcld,1) | pcld='*' then do      /* show hdrs+data   */
+     do n=1 to cbt.0
+       if f.n=1 then d.n=1
      end
-     idad.0=dn
-     idatop=1
    end
-   when Abbrev('AVAILABLE',pcdata,2) then do
-     dn=0
-     drop idad.
-     do n=1 to list.0
-       parse value dn+1 '- 'idaat3''substr(list.n,6) with dn idad.dn
-       cbtn=left(list.n,4)
-       if substr(list.n,5,5)='*FILE' & dsns.cbtn='*' then do
-         idad.dn=overlay(idaai1,idad.dn)
-         idad.dn=overlay(dsns.cbtn,idad.dn,80,1)
-       end
+   when Abbrev('AVAILABLE',pcld,2) then do
+     parse value '0 0' with f. d.
+     do n=1 to cbt.0
+       if dsns.n='*' then f.n=1
      end
-     idad.0=dn
-     idatop=1
    end
-   otherwise return lmsg('Bad parm:' pcdata)
+   otherwise return lmsg('Bad parm:' pcld)
  end
- Return 0
+ idatop=1
+ Return MkPnlBase()
 
  /* search the dataset */
 PcSearch:
@@ -537,7 +462,7 @@ PcSearch:
    if p>0 then test=insert(' ',test,p-1)
  end
  tx=''
- pcslist=''
+ srchlst=''
  do while test<>''
    test=strip(test)
    select
@@ -556,35 +481,42 @@ PcSearch:
      end
      otherwise do
        if pos(right(tx,1),'(&|')=0 then tx=tx '&'
-       tx=tx "pos('"word(test,1)"',slst.n)>0"
-       pcslist=pcslist word(test,1)
+       tx=tx "pos('"word(test,1)"',r)>0"
+       srchlst=srchlst word(test,1)
        test=subword(test,2)
      end
    end
  end
- drop sel.
- sel.=0
- seln=0
- tx="do sln="slstmin "to" slstmax";n=right(sln,4,0);",
-    "if" subword(tx,2) "then do;sel.n=1;seln=seln+1;end;end"
+ /* run filter */
+ tx="do n=1 to cbt.0;",
+    "r=translate(cbt.n);",
+    "if" substr(tx,4) "then parse value seln+1 1 1 with seln f.n d.n; end"
+ parse value '0 0 0 0' with f. d. seln dn   /* reset file- and detail flags */
  Interpret tx  /* run test */
- if seln=0 then return lmsg('Not found')
- /* make list */
- dn=0
+ if seln=0  then return lmsg('Not found')
+ idatop=1
+ return MkPnlbase()+Lmsg(seln 'files found')
+
+MkPnlbase:
  drop idad.
- do n=1 to list.0
-   q=left(list.n,4)
-   if \sel.q then iterate                            /* copy selected files */
-   c=idaat1
-   if substr(list.n,5,5)='*FILE' then c=idaai1
-   parse value dn+1 c' 'idaat3''substr(list.n,6) with dn idad.dn
-   if substr(list.n,5,1)='*' then do
-     cbtn=left(list.n,4)
-     idad.dn=overlay(dsns.cbtn,idad.dn,80,1)                  /* Available */
+ dn=0
+ do n=1 to cbt.0
+   if \f.n then iterate
+   parse var cbt.n f +4 t ($dlm) r
+   t=bitor(f,'0000')''t
+   t=overlay(dsns.n,t,77,1)                          /* Available indicator */
+   parse value dn+1 idaai1' 'idaatb''t with dn idad.dn
+   if \d.n then iterate
+   do until r=''                                     /* expand rest         */
+     parse var r t ($dlm) r
+     parse value dn+1 idaatb'  't with dn idad.dn
    end
-   /* highlite select words */
-   do pln=1 to words(pcslist)
-     plw=word(pcslist,pln)
+ end
+ idad.0=dn
+ /* highlight select words */
+ do dn=1 to idad.0
+   do pln=1 to words(srchlst)
+     plw=word(srchlst,pln)
      pll=length(plw)
      plp=0
      do forever
@@ -595,11 +527,7 @@ PcSearch:
      end
    end
  end
- idad.0=dn
- idatop=1
- return Lmsg(seln 'files found')
  return 0
- Return PcList() + lmsg(seln 'files found')
 
 PcPopup:  /* popup command selector*/
  parse value '' with zcmd pcpcmd psel
@@ -677,19 +605,20 @@ Memlist:
  Return lmsg("memlist" mlds "rc" rc)
 
 PPrompt:
+ Address Ispexec
+ "PQUERY PANEL(CBTSEA#P) AREANAME(PNLAREA) WIDTH(ppwd)"
  pnlarea=''
- ppal=60
  do ppn=1 to arg()
-   if translate(arg(ppn))='OC' then pnlarea=pnlarea || left(' ',ppal),
+   if translate(arg(ppn))='OC' then pnlarea=pnlarea || left(' ',ppwd),
      || center(idaatg'Hit'idaatw'ENTER'idaatg'to continue,',
-     'or hit'idaatw'END'idaatg'to abort',ppal)
-   else pnlarea=pnlarea || left(' 'arg(ppn),ppal)
+     'or hit'idaatw'END'idaatg'to abort',ppwd)
+   else pnlarea=pnlarea || left(' 'arg(ppn),ppwd)
  end
  zcmd=''
- address ispexec "addpop"
- address ispexec "display panel(CBTSEA#P)"
+ "addpop"
+ "display panel(CBTSEA#P)"
  cc=rc
- address ispexec "rempop"
+ "rempop"
  if cc>8 then return xmsg('rc' cc zerrlm)+8
  return cc
 
@@ -704,9 +633,11 @@ DsnList: /* ISPF 3.4 of prefix */
  return 0
 
 Load:  /* load file 1 */
- address ispexec "control display lock"
- Call Pprompt idaatw'Loading data, please be patient'
- slst.=''
+ if \$trace then do
+   address ispexec "control display lock"
+   Call Pprompt idaatw'Loading data, please be patient'
+ end
+ cbt.=''
  cbtf1=GetDsn(1)
  if $trace then call traceit 'Load alloc started'
  Address TSO
@@ -714,29 +645,35 @@ Load:  /* load file 1 */
  if cc<>0 then exit lmsg(cbtf1 'alloc' cc)
  "newstack"
  if $trace then call traceit 'Load read started'
- "execio * diskr" dd1 "(finis)"
- cc=rc
- cc=bpxwdyn('free dd('dd1')')
- qn=queued()
  ln=0
- if $trace then Call Traceit 'Load read done'
- address ispexec "control display lock"
- Call Pprompt idaatb'Loading data, please be patient',,
-     idaatw'Formatting data, we appreciate your continued patience'
- do qn                                    /* filter, leave 'proper' records */
-   parse pull r
-   if substr(r,73,4)<>'FILE' then iterate
-   parse value ln+1 substr(r,77,4)||substr(r,5,64) with ln list.ln
-   if left(list.ln,1)=' ' then list.ln=overlay('0',list.ln)   /* 4 numbers  */
-   parse upper value space(left(list.ln,78)) with k =5 . +1 t /* searchable */
-   slst.k=slst.k t
+ hway=500
+ do forever
+   "execio" 1000 "diskr" dd1
+   rdrc=rc
+   qn=queued()
+   if qn=0 | rdrc<>0 then leave
+   do qn
+     parse pull r
+     if substr(r,73,4)<>'FILE' then iterate /* filter, leave 'proper' records */
+     parse value bitor(substr(r,77,4),'0000')+0 substr(r,6,63) with n t
+     if cbt.n='' then do
+       cbt.n=strip(substr(t,5),'t')        /* new entry       */
+       if \$trace & n=hway then do
+         address ispexec "control display lock"
+         Call Pprompt idaatw'Halfway there...'
+       end
+     end
+     else cbt.n=cbt.n || $dlm || strip(t,'t')              /* add to entry    */
+   end
+   ln=n                                                    /* last number     */
  end
- list.0=ln
  "delstack"
- slstmin=left(list.1,4)
- slstmax=k
- slst.0=slstmax
+ slstmin=1
+ slstmax=ln
+ cbt.0=slstmax
  if $trace then Call Traceit 'Load format done'
+ "execio 0 diskr" dd1 "(finis)"
+ if rdrc>2 then call close 8 'Read rc' rdrc
  return 0
 Load1E:
  Call off error
@@ -746,7 +683,7 @@ Load1E:
 
 GetDsn: return value('dsnl.'arg(1)+0)
 
-GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf
+GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf lastcbtn
  trace off
  arg gdp
  dsnn=0
@@ -757,8 +694,11 @@ GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf
  zz=outtrap('off')
  if cc<>0 then return xmsg('No datasets found for cbthlq' cbthlq)+8
  pff=cbthlq'.FILE'
+ pffl=length(pff)
+ lastcbtn=0
  do lstn=1 to lst.0 by 2
    dsn=word(lst.lstn,3)
+   if left(dsn,pffl)<>pff then iterate
    parse var dsn . =(pfl) cbtn '.' sf
    if datatype(cbtn)<>'NUM' then iterate
    do sn=1 to words(cbtsuf) until word(cbtsuf,sn)=sf
@@ -766,8 +706,9 @@ GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf
    if sn<=words(cbtsuf) then do
      zz=Value('dsnl.'cbtn+0,dsn)
      parse var dsn . (pff) cbtn '.' .
-     zz=Value('dsns.'right(cbtn,4,0),'*')            /* set is-dataset */
+     zz=Value('dsns.'cbtn+0,'*')            /* set is-dataset */
      dsnn=dsnn+1
+     lastcbtn=cbtn
    end
  end
  dsnl.0=dsnn
@@ -976,12 +917,20 @@ DoAlloc:
 [ Find      !Repeat find using previous criteria. If you have a RFIND key
 !            defined you can use that too (se notes).
 [
+[ F1        !View file 001 - doc dataset.
+[
+[ LA        !Short for List Active
+[
+[ LAV       !Short for List AVailable
+[
 [ List      !Show only the section headers. Note that the full command LIST
 !            may be intercepted by ISPF, so be lazy and use L only.
 [
 [ List All  !Show all section headers.
 [
 [ List AVailable!Show section headers for available datasets.
+[
+[ List Data !Show section headers and data. Useful after a List command.
 [
 [ Number n  !Locate file n.
 [
