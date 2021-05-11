@@ -258,10 +258,12 @@ CBTVIEW    Copy this into a CLIST or EXEC library in your normal
 CBTINDEX   A one-line summary of every file on the CBTTape that is used
            by the CBT exec as an index. This is created by by the CBT exec.
            This member is a pre-req for the use of CBTDOWN
-UNZIP      The OMVS port of unzip. It is used when you request a CBT File
-           that is not on your system under the same HLQ as this dataset.
-           Note: this member is in PAX format and will be copied and then
-           extracted into /tmp when required.
+UNZIPXMI   This is a TSO Transmit of the OMVS port of unzip.  The
+           $INSTALL will TSO Receive it into the target FILEIDX.PDS as
+           UNZIP.  It is used when you request a CBT File that is not on
+           your system under the same HLQ as this dataset.  Note: this
+           member is in PAX format and will be copied and then extracted
+           into /tmp when required.
 UNZIPL     Unzip License
 ZDATE      Created and updated with each UPDATE command. Initially does
            not exist.

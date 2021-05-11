@@ -6,15 +6,17 @@
   |    - FILEIDX.PDS is the required suffix                 |
   | 2. Allocate the hlq.FILEIDX.PDS as a PDSE (maxgen=0)    |
   | 3. Copy members from this PDS to it                     |
-  | 4. Open Edit on CBTCONFG to allow the user to customize |
+  | 4. Receive member UNZIPXMI to hlq.FILEIDX.PDS as        |
+  |    member UNZIP                                         |
+  | 5. Open Edit on CBTCONFG to allow the user to customize |
   |    the dialog configuration defaults                    |
-  | 5. Update the CBTVIEW exec to reference the new         |
+  | 6. Update the CBTVIEW exec to reference the new         |
   |    hlq.FILEIDX.PDS                                      |
   * ------------------------------------------------------- */
   parse source with x cmd dd dsn .
   if dsn = '?' then do
-    x = listdsi(dd 'FILE')
-    dsn = sysdsname
+    x    = listdsi(dd 'FILE')
+    dsn  = sysdsname
   end
   fileidx = translate(dsn,' ','.')
   fw = words(fileidx)
@@ -25,8 +27,9 @@
   zerrhm   = ''
   zerralrm = 'NO'
   zerrtp   = 'Notify'
-  dsn     = "'"dsn"'"
-  fileidx = "'"fileidx"'"
+  dsnzip   = "'"dsn"(unzipxmi)'"
+  dsn      = "'"dsn"'"
+  fileidx  = "'"fileidx"'"
 
   Address ISPExec
   "libdef ispplib dataset id("dsn") stack"
@@ -47,10 +50,10 @@
   "libdef ispplib"
   if drc > 0 then exit
 
-  fileidx = strip(fileidx,"B","'")
-  cbtview = "'"fileidx"(cbtview)'"
+  fileidx  = strip(fileidx,"B","'")
+  cbtview  = "'"fileidx"(cbtview)'"
   cbtconfg = "'"fileidx"(cbtconfg)'"
-  fileidx = "'"fileidx"'"
+  fileidx  = "'"fileidx"'"
 
   ddo = 'CBTI'random(999)
   Address TSO
@@ -63,10 +66,18 @@
   'lminit dataid(ddo) dataset('fileidx')'
   'lmcopy fromid('ddi') todataid('ddo') frommem(CBT*) replace'
   'lmcopy fromid('ddi') todataid('ddo') frommem($*) replace'
-  'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIP*) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIPL) replace'
   'lmfree dataid('ddi')'
   'lmfree dataid('ddo')'
 
+  Address TSO
+  x = PROMPT('ON')
+  'newstack'
+  queue 'ds('fileidx')'
+  'Receive inds('dsnzip')'
+  'delstack'
+
+  Address ISPexec ,
   'Edit dataset('cbtconfg')'
 
   Address TSO
