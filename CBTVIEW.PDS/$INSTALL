@@ -33,19 +33,12 @@
 
   Address ISPExec
   "libdef ispplib dataset id("dsn") stack"
-  do forever
+  do
     'AddPop Row(5) Column(3)'
     'Display panel($instalp)'
     drc = rc
     'Rempop'
-    if drc > 0 then leave
-    if right(fileidx,13) /= ".FILEIDX.PDS'" then do
-      zerrsm = ''
-      zerrlm = 'The dataset name must end with .FILEIDX.PDS'
-      'setmsg msg(isrz002)'
-      drc = 1
-    end
-    if drc = 0 then leave
+    if drc > 0 then exit
   end
   "libdef ispplib"
   if drc > 0 then exit
@@ -57,18 +50,59 @@
 
   ddo = 'CBTI'random(999)
   Address TSO
-  'alloc f('ddo') new spa(150,90) tr recfm(f b) lrecl(80) blksize(32720)' ,
-    'dsntype(library,2) dir(1) dsorg(po) dsn('fileidx')'
-  'free f('ddo')'
 
+  /* ---------------------------------------------------------------- *
+  | Test if the FILEIDX exists.                                      |
+  |                                                                  |
+  | If not then set the idxact to R (replace)                        |
+  | If it does exist then test for Replace and delete and reallocate |
+  * ---------------------------------------------------------------- */
+  x = listdsi(fileidx)
+  if x > 0 then idxact = 'R' /* force to Replace if does not exist */
+  if x = 0 then
+  if idxact = 'R' then do
+    call outtrap 'x.'
+    'delete' fileidx
+    call outtrap 'off'
+
+    'alloc f('ddo') new spa(150,90) tr recfm(f b) lrecl(80) blksize(32720)' ,
+      'dsntype(library,2) dir(1) dsorg(po) dsn('fileidx')'
+    'free f('ddo')'
+  end
+
+  /* ------------------------------------------------------- *
+  | Copy the members from the install library to the target |
+  | fileidx library.                                        |
+  |                                                         |
+  | if update then only copy the key updated members.       |
+  * ------------------------------------------------------- */
+  trace '?i'
   Address ISPexec
   'lminit dataid(ddi) dataset('dsn')'
   'lminit dataid(ddo) dataset('fileidx')'
-  'lmcopy fromid('ddi') todataid('ddo') frommem(CBT*) replace'
-  'lmcopy fromid('ddi') todataid('ddo') frommem($*) replace'
-  'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIPL) replace'
+  if idxact = 'R' then do
+    'lmcopy fromid('ddi') todataid('ddo') frommem(CBT*) replace'
+    'lmcopy fromid('ddi') todataid('ddo') frommem($*) replace'
+    'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIPL) replace'
+  end
+  if idxact = 'U' then do
+    'lmcopy fromid('ddi') todataid('ddo') frommem(CBT) replace'
+    'lmcopy fromid('ddi') todataid('ddo') frommem(CBTDOWN) replace'
+    'lmcopy fromid('ddi') todataid('ddo') frommem(CBTSRCH*) replace'
+  end
+
   'lmfree dataid('ddi')'
   'lmfree dataid('ddo')'
+
+  if idxact = 'U' then do
+    zerrsm = ''
+    zerrlm = fileidx 'has been updated with the current version of' ,
+      'the Official CBT ISPF Dialog. You *should* check the CBTCONFG' ,
+      'in this PDS and compare it to the one in' fileidx 'for any' ,
+      'updates.'
+    'setmsg msg(isrz002)'
+    exit 0
+  end
 
   Address TSO
   x = PROMPT('ON')
@@ -78,7 +112,7 @@
   'delstack'
 
   Address ISPexec ,
-  'Edit dataset('cbtconfg')'
+    'Edit dataset('cbtconfg')'
 
   Address TSO
   'Alloc f('ddo') shr reuse ds('cbtview')'

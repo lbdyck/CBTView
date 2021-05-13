@@ -69,10 +69,14 @@ that will host all the CBTTape Datasets.
 
   Automated Installation
   Execute the $INSTALL member of this PDS to:
-     1. Allocate the hlq.FILEIDX.PDS
-     2. Copy the members from this PDS to FILEIDX.PDS
-     3. Edit the CBTCONFG member
-     4. Update the CBTVIEW member (exec) to reference the new
+     1. Prompt for a hlq.FILEIDX.PDS
+        - ask for Replace or Update option
+     2. If New or Replace then allocate the hlq.FILEIDX.PDS
+     3. Copy the members from this PDS to FILEIDX.PDS
+        - if Update then only key memebers
+     4. If Update then exit the $INSTALL dialog
+     5. Edit the CBTCONFG member
+     6. Update the CBTVIEW member (exec) to reference the new
         hlq.FILEIDX.PDS dataset
 
   Manual Installation

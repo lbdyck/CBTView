@@ -1,13 +1,37 @@
 )attr
- _ type(input ) hilite(uscore)
-)Body Window(67,6)
+ _ type(input ) hilite(uscore) caps(on)
+)Body Window(67,9)
 +Enter/Verify the FILEIDX.PDS dataset name:
 +
 +FILEIDX.PDS dataset name:_fileidx                                +
 +
-+or%F3+to cancel.
++Action if hlq.FILEIDX.PDS exists:_z+  %R+Replace or %U+Update
++
+                        +or%F3+to cancel
 +
 )Init
+ .zvars = '(idxact)'
+ &zwinttl = 'The Official CBT ISPF Dialog Installation Prompt'
+ &idxrep = 'U'
 )Proc
- ver(&fileidx,nb,dsname)
+ &resp = .resp
+*Rexx(* zerrsm zerrlm resp)
+  parse value '' with zerrsm zerrlm bad
+  if resp = 'END' then exit
+  zerrhm   = ''
+  zerralrm = 'NO'
+  zerrtp   = 'Notify'
+  if right(fileidx,1) = "'"
+  then if right(fileidx,13) /= ".FILEIDX.PDS'" then bad = 1
+  if right(fileidx,1) /= "'"
+  then if right(fileidx,12) /= ".FILEIDX.PDS" then bad = 1
+  if bad = 1 then
+    zerrlm = 'The dataset name must end with .FILEIDX.PDS'
+*Endrexx
+if (&zerrlm NE &Z)
+   .cursor = FILEIDX
+   .msg = ISRZ003
+if (&zerrlm EQ &Z)
+ ver (&fileidx,nb,dsname)
+ ver (&idxact,nb,list,R,U)
 )End
