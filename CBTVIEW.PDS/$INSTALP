@@ -1,11 +1,16 @@
 )attr
  _ type(input ) hilite(uscore) caps(on)
-)Body Window(67,9)
+)Body Window(67,13)
 +Enter/Verify the FILEIDX.PDS dataset name:
 +
 +FILEIDX.PDS dataset name:_fileidx                                +
 +
 +Action if hlq.FILEIDX.PDS exists:_z+  %R+Replace or %U+Update
++
++  %Replace+will delete the existing hlq.FILEIDX.PDS and reallocate
++  %Update+ will only update the dialog code in hlq.FILEIDX.PDS
++
++If the hlq.FILEIDX.PDS does not exist then the action is ignored.
 +
                         +or%F3+to cancel
 +

@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.32'
+  ver = '1.33'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-13 LBD 1.33                                  |
+  |                     Clean up DSList only cbthlq.file*     |
   |      2021-05-10 LBD 1.32                                  |
   |                     Update ABOUT message                  |
   |                     Clean up Command popup menu process   |
@@ -1039,12 +1041,8 @@ Do_Search:
     * ----------------------------------------------- */
   Do_DSList:
     Address ISPExec
-    "LMDINIT LISTID(LISTID) LEVEL("cbthlq".*."file_pfx"*)"
+    "LMDINIT LISTID(LISTID) LEVEL("cbthlq"."file_pfx"*)"
     "LMDDISP LISTID("ListId") Confirm(Yes)"
-    if rc > 0 then do
-      "LMDINIT LISTID(LISTID) LEVEL("cbthlq"."file_pfx"*)"
-      "LMDDISP LISTID("ListId") Confirm(Yes)"
-    end
     "LMDFREE LISTID("ListId")"
     return
 

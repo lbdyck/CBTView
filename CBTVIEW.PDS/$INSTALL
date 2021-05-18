@@ -76,7 +76,6 @@
   |                                                         |
   | if update then only copy the key updated members.       |
   * ------------------------------------------------------- */
-  trace '?i'
   Address ISPexec
   'lminit dataid(ddi) dataset('dsn')'
   'lminit dataid(ddo) dataset('fileidx')'

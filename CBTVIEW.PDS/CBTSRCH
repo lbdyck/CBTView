@@ -53,13 +53,22 @@
                    20% decrease in load time
                    60000+ fewer variables leading to 2/3 saving in storage
   010 2021-05-09  New command List Data.
+  011 2021-05-13  New subroutine File1Check - check and download file 001.
+                  Fix L lcmd issue for last selected file.
+                  New command Next - position at next file header.
+                  New command Prev - position at current or prev file header.
+                  New command List n - Position at file n.
+  012 2021-05-14  When called from CBT and file 1 isn't found then return.
+  013 2021-05-14  Improved search result highlighting.
+  014 2021-05-17  Free file001 after load.
+                  Rewrite LOAD, slight performance improvement.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='010.1 2021-05-09'
+ cbtsver='014 2021-05-17'
  Address ispexec "control errors return"
  "delstack"
 
@@ -67,37 +76,49 @@
  arg p
  parse value ' 'p  with p1 'CBTHLQ(' cbthlq ')' p2
  parse value p1 p2 with p1 'CBTSUF(' cbtsuf ')' p2
- parse value p1 p2 with p1 'TRACE(' trace ')' p2
  parse value p1 p2 with p1 'PARENT(' $parent ')' p2    /* parent's name */
+ parse value p1 p2 with p1 'READC(' $readc ')' p2
+ parse value p1 p2 with p1 'TRACE(' $trace ')' p2
  if p1 p2<>'' then exit xmsg('Invalid parm:' space(p1 p2))
 
  /* global definitions */
  if cbthlq = '' then exit xmsg('Parm CBTHLQ is required')+8
  if cbtsuf = '' then cbtsuf='PDS DATA'
  upper cbthlq cbtsuf                      /* just in case                    */
- $trace=(trace='Y')
+ $trace=($trace='Y')
  idanamel  = 'SEL 1 TEXT 80'                   /* name length pairs         */
  idadeffld = 'TEXT'                            /* default name for sort etc */
  Address Ispexec
  "vget (zscrmaxd zscrmaxw) shared"
  parse value 'CBTSEA#L' '\'   with idapanel $dlm ddlist sysindd sysprtdd,
-   wrklibdd rfindpfk rfindpfsfilesupd srchlst
+   wrklibdd rfindpfk rfindpfsfilesupd srchlst pcfindsave hilite
  parse value 80       zscrmaxd 1       0        'ZCMD',
         with idascrwt idascrdp idatop idacsrp idacsrf idad. .
- parse value xrange('11'x,'17'x) with idaai1 +1 idaai2 +1 idaai3 ,
-        +1 idaat1 +1 idaat2 +1 idaat3 +1 idaat4 .
- parse value idaat1 idaat2 idaat3 idaat4 ,
-        with idaatt idaatg idaatb idaatw
+ parse value xrange('11'x,'18'x) with idaai1 +1 idaai2 +1 idaai3 ,
+        +1 idaat1 +1 idaat2 +1 idaat3 +1 idaat4 +1 idaao1 .
+ parse value idaat1 idaat2 idaat3 idaat4 idaao1,
+        with idaatt idaatg idaatb idaatw idaaog .
  parse value copies('0 ',50) with f. d. .
+ tracetime=time('r')
+ starttime=time('s')
+ tottime  =0
+
+ /* build templib */
+ Call MakeWlib
+
+ /* If called from CBTVIEW then check file 1 is available */
+ if $parent='CBTVIEW' then do
+   if Listdsi("'"cbthlq".FILE001.DATA'")<>0 then,
+     Call close,
+       Pprompt(,,idaatg'Required dataset' cbthlq'.FILE001.DATA not found.',
+     ,,idaatg'Hit ENTER to return to CBT(VIEW) where you can fix this.')+8
+ end
 
  /* get started */
  parse value '' with dsnl. dsns.
  if GetDsnList()<>0 then exit 8
  if GetDsn(1)='' then exit xmsg('File 1 not located')+8
  Address ispexec "vget (filesupd)"                                     /*005.1*/
- zz=Time('r')
- if $trace then tracetime=time('r')
- Call MakeWlib
  Call Load
 
  /* field mappings */
@@ -136,6 +157,7 @@
  if $parent<>'' then,
  queue  'Parent          'idaat2 $parent
  queue  ''
+ queue  '# File descs    'idaat2 cbt.0
  queue  '# Datasets found'idaat2 dsnl.0
  idad.0 =queued()
  do n=1 to idad.0
@@ -155,7 +177,7 @@
  end
 
  /* run */
- if $trace then call Traceit 'Ready'
+ if $trace then call Traceit 'Ready, starttime' tottime
  cc=Dialog()
  Call Close
 
@@ -177,7 +199,7 @@ trace off
  address ispexec
  Do forever
    /* build panel area */
-   idaarea=''
+   parse value '' with idaarea idaattr
    pnllo=0
    do pnlli=idatop to idad.0 until pnllo>=idascrdp
      if left(idad.pnlli,1)='-' then iterate /* suppressed */
@@ -185,6 +207,19 @@ trace off
      pnllo=pnllo+1
      pnldlp.pnllo=pnlli                  /* data list pos */
    end
+   /* highlight select words */
+   idaattr=copies(' ',length(idaarea))
+   hia    =translate(idaarea)
+   do hc=1 to words(hilite)
+     parse value word(hilite,hc) word(hilitel,hc) with hs hl .
+     hp=0
+     do forever
+       hp=pos(hs,hia,hp+1)
+       if hp=0 then leave
+       idaattr=overlay(copies(idaaog,hl),idaattr,hp)
+     end
+   end
+
    if idacsrf='IDAAREA' then idacsrp=((idacsrp%idascrwt)*idascrwt)+2
    else parse value 'ZCMD 1' with idacsrf idacsrp
    pnlstatl=right(idatop 'of' idad.0,22)
@@ -195,6 +230,7 @@ trace off
      zz=value(rfindpfk,'RRFIND')
      address ispexec "vput" rfindpfk
    end
+   zverb=''
    "display panel("idapanel")"
    cc=rc
    if rfindpfk<>'' then do
@@ -205,6 +241,8 @@ trace off
    if cc>8 then exit xmsg('panel' idapanel 'rc' cc zerrlm)
    if cc>4 | wordpos(translate(zcmd),'END RETURN')>0 then return 4
    idalmsg=''
+
+   "vget (zverb zscrolla zscrolln) shared"
 
    /* handle primary commands */
    if zcmd<>'' then do
@@ -240,7 +278,6 @@ trace off
      end
    end
    if pnllcmde<>0 then iterate
-   "vget (zverb zscrolla zscrolln) shared"
 
    /* point-and-shoot */
    if wordpos(zverb,'DOWN UP')=0 ,
@@ -300,7 +337,7 @@ LCmd:                          /* linecmd, pnlline nr, dataline nr */
      lcrc = Memlist(GetDsn(fn))
    end
    when lcmd='L'  then lcrc = LcList()
-   when lcmd='F'  then lcrc = LcFetch()
+   when lcmd='F'  then lcrc = Fetch()
    when lcmd='Z'  then say translate(idad.lcdln,'?',xrange('11'x,'17'x))
    otherwise lcrc=lmsg('Invalid line command' lcmd)+1
  end
@@ -311,29 +348,23 @@ LcList:
  fn=lcdln
  fn=substr(idad.lcdln,4,4)+0
  n=lcdln+1
- d.fn=(left(idad.n,1)<idaat1)                         /* set data flag  */
+ if d.fn=0 then,
+   d.fn=(left(idad.n,1)<idaat1 | fn=f.@lastfn)         /* set data flag   */
+ else d.fn=0                                           /* set nodata flag */
  Return MkPnlbase()
 
-LcFetch:
+Fetch: /* parm: cbtn | null, NLC (Not Line Command) */
  if $parent<>'CBTVIEW' then return lmsg('Parent is not CBTVIEW')
- Signal on error name LcFetchE
- cbtn=substr(idad.lcdln,4,4)
+ Signal on error name FetchErr
+ cbtn=word(arg(1) substr(idad.lcdln,4,4),1)
  ds=GetDsn(cbtn+0)
  if ds<>'' then Call Xtso "DEL '"ds"'"
- zz=outtrap('lst.')
  if wordpos(cbtn,filesupd) > 0 then cbtup = 'U'                        /*005.1*/
  else cbtup = '   '                                                    /*005.1*/
  n=right(cbtn+0,3,0)                                         /* circumvention */
  if n>999 then n='0'n                                        /* circumvention */
- cc=cbtdown(space(cbthlq cbtn+0) cbtup)                                /*005.1*/
- zz=outtrap('off')
- if cc<>0 then do
-   say 'CBTDOWN error..'
-   do n=1 to lst.0
-     say ' ' lst.n
-   end
-   return 8
- end
+ if XCbtDownload(cbthlq,cbtn,cbtup)<>0,
+   then return lmsg('Fetch (download)' cbtn 'failed')+8
  cc=GetDsnList()     /* refresh */
  ds=GetDsn(cbtn+0)
  if sysdsn("'"ds"'")<>'OK' then return lmsg('Fetch' cbtn 'failed')+8
@@ -342,9 +373,20 @@ LcFetch:
  idad.lcdln=overlay('*',idad.lcdln,80,1)
  zz=SetField(pnldln,'sel',' ','i1')                     /* clear select field */
  Return lmsg('File' cbtn 'fetched')
-LcFetchE:
+FetchErr:
  Call off error
  Return lmsg('Error running CBTDOWN')+8
+
+XCBTDownload:
+ zz=outtrap('lst.')
+ cc=cbtdown(space(arg(1) arg(2)+0) arg(3))
+ zz=outtrap('off')
+ if cc=0 then return 0
+ say 'CBTDOWN error..'
+ do n=1 to lst.0
+   say ' ' lst.n
+ end
+ return 8
 
  /*                   primary command handler                        */
 PCmd: /* parm = panel line pos, panel line nr */
@@ -353,15 +395,23 @@ PCmd: /* parm = panel line pos, panel line nr */
    Select
      when zcmd ='F1' then return XISP("view dataset('"GetDsn(1)"')")
      when Abbrev('SEARCH',pcvrb,1) then return PcSearch()
+     when Abbrev('LIST',pcvrb,1) & datatype(pcdata)='NUM',
+       then return PcNumber()
      when Abbrev('LIST',pcvrb,1) then return PcList()
+     when Abbrev('PREVIOUS',zcmd,1) then Return PcPrev()
+     when Abbrev('NEXT',zcmd,1) then Return PcNext()
      when Abbrev('NUMBER',pcvrb,1) then Return PcNumber()
      when Abbrev('FIND',pcvrb,1) then Return PcFind()
      when Abbrev('RFIND',zcmd,2) then Return PcFind()
-     when (Abbrev('CBTVIEW',zcmd,4) | zcmd='CV') & $parent='CBTVIEW' then,
-       return lmsg('Cannot invoke own caller')
+     when (Abbrev('CBTVIEW',zcmd,4) | zcmd='CV') & $parent='CBTVIEW',
+       then return lmsg('Cannot invoke own caller')
      when Abbrev('CBTVIEW',zcmd,4) | zcmd='CV' then Return RunExt("CBTVIEW")
      when Abbrev('VIEW',zcmd,1) then Return RunExt("CBTVIEW")
      when Abbrev('DSNLIST',zcmd,1) then Return DsnList()
+     when Abbrev('RESET',zcmd,3) then do
+       hilite=''
+       return 0
+     end
      when Abbrev('VERSION',zcmd,3) then return lmsg('Version' cbtsver)
      when pcvrb='SL' then do
        cc=PcSearch()
@@ -369,6 +419,7 @@ PCmd: /* parm = panel line pos, panel line nr */
        return PcList()
      end
      when zcmd ='LA'   then Return PcList('ALL')
+     when zcmd ='LD'   then Return PcList('DATA')
      when zcmd ='LAV'  then Return PcList('AVAILABLE')
      when pcvrb='SET'  then do
        parse var pcdata v .'=' d
@@ -390,6 +441,23 @@ PCmd: /* parm = panel line pos, panel line nr */
    End
  End
  Return 0
+
+PcPrev:   /* position at current or previous file top */
+ if idatop>1 then do
+   do n=idatop-1 to 1 by -1 until left(idad.n,1)<idaat1
+   end
+   idatop=n
+ end
+ return 0
+
+PcNext:   /* position at next file top */
+ do n=idatop+1 to idad.0
+   if left(idad.n,1)<idaat1 then do
+     idatop=n
+     leave
+   end
+ end
+ return 0
 
 PcNumber:  /* set display at name         */
  if datatype(pcdata)<>'NUM' then return lmsg('Missing number')+1
@@ -450,7 +518,8 @@ PcList:  /* show only headers */
  /* search the dataset */
 PcSearch:
  /* make test statement */
- test=pcdata
+ test=translate(pcdata,' ','()|&"')
+ test=space(translate(test," ","'"))
  p=0
  do until p=0
    p=pos('(',test,p+1)
@@ -461,8 +530,7 @@ PcSearch:
    p=pos(')',test,p+2)
    if p>0 then test=insert(' ',test,p-1)
  end
- tx=''
- srchlst=''
+ parse value '' with tx hilite hilitel
  do while test<>''
    test=strip(test)
    select
@@ -482,7 +550,7 @@ PcSearch:
      otherwise do
        if pos(right(tx,1),'(&|')=0 then tx=tx '&'
        tx=tx "pos('"word(test,1)"',r)>0"
-       srchlst=srchlst word(test,1)
+       hilite=hilite word(test,1)
        test=subword(test,2)
      end
    end
@@ -493,8 +561,11 @@ PcSearch:
     "if" substr(tx,4) "then parse value seln+1 1 1 with seln f.n d.n; end"
  parse value '0 0 0 0' with f. d. seln dn   /* reset file- and detail flags */
  Interpret tx  /* run test */
- if seln=0  then return lmsg('Not found')
+ if seln=0 then return lmsg('Not found')
  idatop=1
+ do n=1 to words(hilite)
+   hilitel=hilitel length(word(hilite,n))
+ end
  return MkPnlbase()+Lmsg(seln 'files found')
 
 MkPnlbase:
@@ -502,6 +573,7 @@ MkPnlbase:
  dn=0
  do n=1 to cbt.0
    if \f.n then iterate
+   f.@lastfn=n
    parse var cbt.n f +4 t ($dlm) r
    t=bitor(f,'0000')''t
    t=overlay(dsns.n,t,77,1)                          /* Available indicator */
@@ -513,20 +585,6 @@ MkPnlbase:
    end
  end
  idad.0=dn
- /* highlight select words */
- do dn=1 to idad.0
-   do pln=1 to words(srchlst)
-     plw=word(srchlst,pln)
-     pll=length(plw)
-     plp=0
-     do forever
-       plp=pos(plw,translate(idad.dn),plp+1)
-       if plp=0 then leave
-       idad.dn=overlay(idaatg,idad.dn,plp-1)
-       idad.dn=overlay(idaatb,idad.dn,plp+pll)
-     end
-   end
- end
  return 0
 
 PcPopup:  /* popup command selector*/
@@ -565,6 +623,7 @@ XMsg: parse arg zedlmsg;return xisp("setmsg msg(ISRZ000)")
 XTSO: zz=outtrap('XT.');address TSO arg(1);zz=outtrap('off');return rc
 Traceit:
  say time() format(time('e')-tracetime,6,2) arg(1)
+ tottime=tottime+time('e')
  tracetime=time('r')
  return 0
 
@@ -604,7 +663,7 @@ Memlist:
  if cc=0 then return 0
  Return lmsg("memlist" mlds "rc" rc)
 
-PPrompt:
+PPrompt: /* returns 0=false=cancel, 1=true=ok */
  Address Ispexec
  "PQUERY PANEL(CBTSEA#P) AREANAME(PNLAREA) WIDTH(ppwd)"
  pnlarea=''
@@ -612,15 +671,16 @@ PPrompt:
    if translate(arg(ppn))='OC' then pnlarea=pnlarea || left(' ',ppwd),
      || center(idaatg'Hit'idaatw'ENTER'idaatg'to continue,',
      'or hit'idaatw'END'idaatg'to abort',ppwd)
-   else pnlarea=pnlarea || left(' 'arg(ppn),ppwd)
+   else pnlarea=pnlarea || center(arg(ppn),ppwd)
  end
  zcmd=''
  "addpop"
  "display panel(CBTSEA#P)"
  cc=rc
  "rempop"
- if cc>8 then return xmsg('rc' cc zerrlm)+8
- return cc
+ if cc>8 then return xmsg('rc' cc zerrlm)
+ if cc>0 then return 0
+ return 1
 
 DsnList: /* ISPF 3.4 of prefix */
  address ispexec
@@ -643,37 +703,33 @@ Load:  /* load file 1 */
  Address TSO
  cc=bpxwdyn("alloc da('"cbtf1"') shr rtddn(dd1)")
  if cc<>0 then exit lmsg(cbtf1 'alloc' cc)
- "newstack"
- if $trace then call traceit 'Load read started'
- ln=0
- hway=500
+ zz=Listdsi(dd1 'file')
+ readn=0
+ ok   =0
+ readc=word($readc sysblksize/80,1)
+ if readc<400 & $readc='' then readc=700
+ if $trace then call traceit 'Load started using stem',
+     'dsn' sysdsname 'blksz' sysblksize 'readc' readc
  do forever
-   "execio" 1000 "diskr" dd1
+   "execio" readc "diskr" dd1 "(stem a.)"
    rdrc=rc
-   qn=queued()
-   if qn=0 | rdrc<>0 then leave
-   do qn
-     parse pull r
-     if substr(r,73,4)<>'FILE' then iterate /* filter, leave 'proper' records */
-     parse value bitor(substr(r,77,4),'0000')+0 substr(r,6,63) with n t
-     if cbt.n='' then do
-       cbt.n=strip(substr(t,5),'t')        /* new entry       */
-       if \$trace & n=hway then do
-         address ispexec "control display lock"
-         Call Pprompt idaatw'Halfway there...'
-       end
-     end
+   readn=readn+a.0
+   if a.0=0 | rdrc>2 then leave
+   if \ok then if substr(a.readc,73,4)<>'FILE' then iterate
+   ok=1                                                    /* FILEnnnn found  */
+   do a=1 to a.0
+     if substr(a.a,73,4)<>'FILE' then iterate       /* leave 'proper' records */
+     parse value bitor(substr(a.a,77,4),'0000')+0 substr(a.a,6,63) with n t
+     if cbt.n='' then cbt.n=strip(substr(t,5),'t')         /* new entry       */
      else cbt.n=cbt.n || $dlm || strip(t,'t')              /* add to entry    */
    end
-   ln=n                                                    /* last number     */
  end
- "delstack"
- slstmin=1
- slstmax=ln
- cbt.0=slstmax
- if $trace then Call Traceit 'Load format done'
+ cbt.0=n
+ if $trace then Call Traceit 'Load done, records read:' readn
  "execio 0 diskr" dd1 "(finis)"
+ cc=bpxwdyn("free dd("dd1")")
  if rdrc>2 then call close 8 'Read rc' rdrc
+ drop a.
  return 0
 Load1E:
  Call off error
@@ -796,13 +852,15 @@ DoAlloc:
  15 type(dataout) color(green ) caps(off)
  16 type(dataout) color(blue  ) caps(off)
  17 type(dataout) color(white ) caps(off)
+ /* text color override */
+ 18 type(char) color(green )
 )Body expand(\\) width(80)
 "                                %CBT Search     &idasmsg
 %ISPF cmd ==>_zcmd \ \+ +Scrl_scrl+
 !&idalmsg
 +
 %&pnltexth
-|idaarea\ \|
+|idaarea,idaattr\ \|
 )Init
  .cursor = &idacsrf            /* set cursor in field        */
  .csrpos = &idacsrp            /* set cursor pos in field    */
@@ -923,6 +981,8 @@ DoAlloc:
 [
 [ LAV       !Short for List AVailable
 [
+[ LD        !Short for List Data
+[
 [ List      !Show only the section headers. Note that the full command LIST
 !            may be intercepted by ISPF, so be lazy and use L only.
 [
@@ -932,7 +992,19 @@ DoAlloc:
 [
 [ List Data !Show section headers and data. Useful after a List command.
 [
-[ Number n  !Locate file n.
+[ List n    !Position at file n. Same as Number n, added for compatibility
+!            with the CBTVIEW List command.
+[
+[ Next      !Positions at the top of the next file. Useful when listing
+!            file data.
+[
+[ Previous  !Position at the top of the current or the previous file (if the
+!            top of the display is a file header). Useful when listing file
+!            data.
+[
+[ Number n  !Position at file n.
+[
+[ RESet     !Reset search result highlightes.
 [
 [ RFin      !Repeat find using previous criteria. If you have a RFIND key
 !            defined you can use that too (se notes).
