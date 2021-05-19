@@ -62,13 +62,14 @@
   013 2021-05-14  Improved search result highlighting.
   014 2021-05-17  Free file001 after load.
                   Rewrite LOAD, slight performance improvement.
+  015 2021-05-18  New parm DATA(COV) for accessing overflow data.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='014 2021-05-17'
+ cbtsver='015 2021-05-18'
  Address ispexec "control errors return"
  "delstack"
 
@@ -78,13 +79,17 @@
  parse value p1 p2 with p1 'CBTSUF(' cbtsuf ')' p2
  parse value p1 p2 with p1 'PARENT(' $parent ')' p2    /* parent's name */
  parse value p1 p2 with p1 'READC(' $readc ')' p2
+ parse value p1 p2 with p1 'DATA(' $data ')' p2        /* FILE / COV    */
  parse value p1 p2 with p1 'TRACE(' $trace ')' p2
  if p1 p2<>'' then exit xmsg('Invalid parm:' space(p1 p2))
+ $data=word($data 'FILE',1)
+ if wordpos($data,'FILE COV')=0 then exit xmsg('Bad DATA parm:' $data)+8
 
  /* global definitions */
  if cbthlq = '' then exit xmsg('Parm CBTHLQ is required')+8
  if cbtsuf = '' then cbtsuf='PDS DATA'
  upper cbthlq cbtsuf                      /* just in case                    */
+ datads= "'"cbthlq"."$data"001.DATA'"
  $trace=($trace='Y')
  idanamel  = 'SEL 1 TEXT 80'                   /* name length pairs         */
  idadeffld = 'TEXT'                            /* default name for sort etc */
@@ -108,9 +113,8 @@
 
  /* If called from CBTVIEW then check file 1 is available */
  if $parent='CBTVIEW' then do
-   if Listdsi("'"cbthlq".FILE001.DATA'")<>0 then,
-     Call close,
-       Pprompt(,,idaatg'Required dataset' cbthlq'.FILE001.DATA not found.',
+   if Listdsi(datads)<>0 then Call close,
+       Pprompt(,,idaatg'Required dataset' datads 'not found.',
      ,,idaatg'Hit ENTER to return to CBT(VIEW) where you can fix this.')+8
  end
 
@@ -147,13 +151,14 @@
  zcmd=''
  "newstack"
  queue  ''
- queue  'Use the Search command to find lines in the CBT.FILE001 dataset',
+ queue  'Use the Search command to find lines in the data dataset',
         'with text.'
  queue  ''
  queue  'Use the HELP command to see details.'
  queue  ''
  queue  'CBTHLQ value    'idaat2 cbthlq
  queue  'CBTSUF value    'idaat2 cbtsuf
+ queue  'Data dataset    'idaat2 strip(datads,"b","'")
  if $parent<>'' then,
  queue  'Parent          'idaat2 $parent
  queue  ''
@@ -685,7 +690,7 @@ PPrompt: /* returns 0=false=cancel, 1=true=ok */
 DsnList: /* ISPF 3.4 of prefix */
  address ispexec
  zerrlm=''
- "lmdinit listid(dsldid) level("cbthlq".FILE*.**)"
+ "lmdinit listid(dsldid) level("cbthlq"."$data"*.**)"
  if rc>0 then return xmsg('lmdinit failed rc' rc zerrlm)
  "lmddisp listid("dsldid")"
  if rc>0 then call xmsg 'lmdlist failed rc' rc zerrlm
@@ -739,17 +744,17 @@ Load1E:
 
 GetDsn: return value('dsnl.'arg(1)+0)
 
-GetDsnList: procedure expose dsns. dsnl. cbthlq cbtsuf lastcbtn
+GetDsnList: procedure expose $data dsns. dsnl. cbthlq cbtsuf lastcbtn
  trace off
  arg gdp
  dsnn=0
- pfl =length(cbthlq)+6       /* hlq + '.FILE' */
+ pfl =length(cbthlq)+length($data)+2     /* hlq + '.FILE' */
  zz=outtrap('lst.')
  address tso "listc lvl('"cbthlq"')"
  cc=rc
  zz=outtrap('off')
  if cc<>0 then return xmsg('No datasets found for cbthlq' cbthlq)+8
- pff=cbthlq'.FILE'
+ pff=cbthlq'.'$data
  pffl=length(pff)
  lastcbtn=0
  do lstn=1 to lst.0 by 2
