@@ -7,11 +7,11 @@ This is an ISPF application that provides quick, and easy, access to the
 contents of the CBTTAPE 'tape', updates, and overflow, directly from your
 z/OS TSO/ISPF session.
 
-This application requires that FILE001 be available. If it isn't, and FTP
-is enabled, then it will be downloaded (see Dynamic download below). Then
-the file will be processed to generate an index member (1-line description
-for each CBT file), and a separate member for each CBT file with the full
-file description/summary.
+This application requires that FILE001 be available. If it isn't, and FTP is
+enabled, then it will be downloaded (see Dynamic download below). Then the
+file will be processed to generate an index member (1-line description for
+each CBT file), and a separate member for each CBT file with the full file
+description/summary.
 
 This is accomplished in one of two ways.
 
@@ -33,10 +33,10 @@ This is accomplished in one of two ways.
          format
        - Updating the summary information about the file
 
-The CBTTAPE is a collection of files (over 1,000 tools) for use with
-z/OS.  These tools are all open-source and have been contributed to the
-'tape' since 1975. Today the CBTTAPE is a website where all of the files
-are available for access.  Its address is www.cbttape.org .
+The CBTTAPE is a collection of files (over 1,000 tools) for use with z/OS.
+These tools are all open-source and have been contributed to the 'tape'
+since 1975. Today the CBTTAPE is a website where all of the files are
+available for access.  Its address is www.cbttape.org .
 
 There are two 'tapes' in the CBTTAPE collection.
 

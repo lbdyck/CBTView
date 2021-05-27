@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.34'
+  ver = '1.35'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-27 LBD 1.35                                  |
+  |                     Allow files with EMPTY in description |
   |      2021-05-18 LBD 1.34                                  |
   |                     Support CBTSRCH use of Overflow       |
   |                     Add C(hange) command to change hlq    |
@@ -327,7 +329,6 @@ Do_Index:
     if wordpos(file,cbt_online) = 0
     then online = null
     else online = '*'
-    if desc = 'EMPTY' then iterate
     idx_file.file = 1
     if wordpos(file,update_files) = 0
     then fupflg = null
