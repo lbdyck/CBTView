@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.35'
+  ver = '1.36'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-28 LBD 1.36                                  |
+  |                     JK's suggestion - support find string |
   |      2021-05-27 LBD 1.35                                  |
   |                     Allow files with EMPTY in description |
   |      2021-05-18 LBD 1.34                                  |
@@ -830,7 +832,7 @@ Remove_RFind:
   | Do FIND Routine to find the string in the description |
   * ----------------------------------------------------- */
 Do_Find:
-  find = translate(word(zcmd,2))
+  find = strip(translate(subword(zcmd,2)))
   if length(find) = 0 then do
     zerrsm = 'Error.'
     zerrlm = 'Find requires a string (e.g. F VSAM)'
