@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.36'
+  ver = '1.37'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,10 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-05-29 LBD 1.39                                  |
+  |                     Support $FILExxx/$FILxxxxx if @FIL... |
+  |                     is not found in the updated file      |
+  |                     Fix duplicate retrieve with U         |
   |      2021-05-28 LBD 1.36                                  |
   |                     JK's suggestion - support find string |
   |      2021-05-27 LBD 1.35                                  |
@@ -523,6 +527,7 @@ Do_Select:
       csel = null
       return 4
     end
+  else if csel = 'U' then csel = null
   end
   Address ISPExec
   Select
@@ -1120,7 +1125,7 @@ Do_Search:
     if x < 5 then return cbthlq'.'file_pfx''file'.DATA'
     return 0
 
-  FTP_DSN:
+FTP_DSN:
     if update = 0 then return 4
     if csel /= 'U' then do
       address ispexec
@@ -1185,7 +1190,7 @@ Do_Search:
     /* ---------------------------------------------------- *
     | Perform the FTP to get the file from www.cbttape.org |
     * ---------------------------------------------------- */
-  FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
+FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
       zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
       zip_pfx
     arg file
@@ -1689,7 +1694,11 @@ Do_Search:
     else mem = '@FIL'file
     input = "'"cbthlq"."file_pfx""file".PDS("mem")'"
     output = "'"cbthlq".FILEIDX.PDS("file_pfx""file")'"
-    if sysdsn(input) /= 'OK' then return 4
+    if sysdsn(input) /= 'OK' then do
+       mem = '$'substr(mem,2)
+       input = "'"cbthlq"."file_pfx""file".PDS("mem")'"
+       if sysdsn(input) /= 'OK' then return 4
+       end
     x = listdsi(input)
     if x > 4 then return 4
     if sysdsorg = 'PS' then return 4
