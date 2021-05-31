@@ -334,8 +334,6 @@ Do_Index:
     if cbtv = null then cbtv = strip(fdate)
     file = strip(file)
     desc = strip(desc)
-    if special /= 1 then
-    if desc = 'EMPTY' then iterate
     if right(desc,2) = ' *' then
     desc = strip(substr(desc,1,length(desc)-2))
     if wordpos(file,cbt_online) = 0
@@ -346,8 +344,6 @@ Do_Index:
     then fupflg = null
     else do
       desc = strip(updates.file)
-      if special /= 1 then
-      if desc = 'EMPTY' then iterate
       if left(fdate,1) /= 'V' then do
         w = wordpos(file,update_files)
         cdn = word(update_files,w+1)
@@ -366,7 +362,9 @@ Do_Index:
         fdate = word(update_files,w+1)
       end
     end
-    'tbadd' cbtdd
+    if special /= 1 then
+       if desc = 'EMPTY' then iterate
+  'tbadd' cbtdd
   end
 
   /* -------------------------- *
