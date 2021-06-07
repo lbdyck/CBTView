@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.39'
+  ver = '1.40'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-06-05 LBD 1.40                                  |
+  |                     Correct rename message if backup=0    |
+  |                     Update CBTINDEX with updated files    |
   |      2021-06-01 LBD 1.39                                  |
   |                     Correct code error on update          |
   |      2021-05-30 LBD 1.38                                  |
@@ -334,6 +337,7 @@ Do_Index:
   do i = 1 to idx.0
     parse value idx.i with file desc 69 fdate .
     if cbtv = null then cbtv = strip(fdate)
+    fupflg = null
     file = strip(file)
     desc = strip(desc)
     if right(desc,2) = ' *' then
@@ -351,6 +355,7 @@ Do_Index:
         cdn = word(update_files,w+1)
         cdn = left(cdn,2)''substr(cdn,4,2)''right(cdn,2)
         cdo = left(fdate,2)''substr(fdate,4,2)''right(fdate,2)
+        if online = null then fupflg = '+'
         if cdn > cdo then do
           fupflg = '+'
           update_count = update_count + 1
@@ -372,6 +377,7 @@ Do_Index:
   /* -------------------------- *
   | Add new files to the table |
   * -------------------------- */
+  write_index = 0
   if words(update_files) > 0 then do
     do ui = 1 to words(update_files) by 2
       file = word(update_files,ui)
@@ -379,7 +385,13 @@ Do_Index:
       desc = updates.file
       wd = wordpos(file,update_files)
       fdate = word(update_files,wd+1)
-      fupflg = '+'
+      if datatype(idx.file) /= 'NUM' then do
+         write_index = 1
+         ic = idx.0 + 1
+         idx.ic = left(left(file,4) strip(desc),69) fdate
+         idx.0 = ic
+         fupflg = '+'
+         end
       if wordpos(file,cbt_online) = 0
       then online = null
       else online = '*'
@@ -390,6 +402,13 @@ Do_Index:
     end
     'tbsort' cbtdd 'fields(file,n,a)'
   end
+    if write_index = 1 then do
+    Address TSO
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS("idxmem")')"
+    'execio * diskw' cbtdd '(finis stem idx.'
+    'free f('cbtdd')'
+    Address ISPExec
+    end
 
   if update_count > 0 then do
     zerrsm = 'Updates.'
@@ -577,6 +596,7 @@ Do_Select:
           zerrsm = 'Updated.'
           zerrlm = 'The requested file(s) has been updated with a clean' ,
             'copy from the CBTTape website.'
+          if backup = 1 then
           if renamec > 0 then zerrlm = zerrlm 'The previous dataset was' ,
             'renamed.'
           'setmsg msg(isrz003)'
