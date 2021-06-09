@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.40'
+  ver = '1.41'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-06-07 LBD 1.41                                  |
+  |                     Error check sort options              |
   |      2021-06-05 LBD 1.40                                  |
   |                     Correct rename message if backup=0    |
   |                     Update CBTINDEX with updated files    |
@@ -370,8 +372,8 @@ Do_Index:
       end
     end
     if special /= 1 then
-       if desc = 'EMPTY' then iterate
-  'tbadd' cbtdd
+    if desc = 'EMPTY' then iterate
+    'tbadd' cbtdd
   end
 
   /* -------------------------- *
@@ -386,12 +388,12 @@ Do_Index:
       wd = wordpos(file,update_files)
       fdate = word(update_files,wd+1)
       if datatype(idx.file) /= 'NUM' then do
-         write_index = 1
-         ic = idx.0 + 1
-         idx.ic = left(left(file,4) strip(desc),69) fdate
-         idx.0 = ic
-         fupflg = '+'
-         end
+        write_index = 1
+        ic = idx.0 + 1
+        idx.ic = left(left(file,4) strip(desc),69) fdate
+        idx.0 = ic
+        fupflg = '+'
+      end
       if wordpos(file,cbt_online) = 0
       then online = null
       else online = '*'
@@ -402,13 +404,13 @@ Do_Index:
     end
     'tbsort' cbtdd 'fields(file,n,a)'
   end
-    if write_index = 1 then do
+  if write_index = 1 then do
     Address TSO
     "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS("idxmem")')"
     'execio * diskw' cbtdd '(finis stem idx.'
     'free f('cbtdd')'
     Address ISPExec
-    end
+  end
 
   if update_count > 0 then do
     zerrsm = 'Updates.'
@@ -732,6 +734,7 @@ Do_ZCMD:
     end
     When abbrev('SORT',translate(word(zcmd,1)),2) = 1 then do
       field = word(zcmd,2)
+      parse value '' with zerrsm zerrlm
       if field = null then do
         zerrsm = 'Error.'
         zerrlm = 'Sort requires a column name (File or Date), with' ,
@@ -747,10 +750,24 @@ Do_ZCMD:
           field = 'FDATE'
           stype = 'C'
         end
-        direction = word(zcmd,3)
-        if direction = null then direction = 'A'
-        'tbsort' cbtdd 'fields('field','stype','direction')'
-        ctop = 0
+        if wordpos(field,'FILE FDATE') = 0 then do
+          zerrsm = 'Invalid.'
+          zerrlm = 'Sort field of' field 'is not valid - try FILE or DATE'
+          'setmsg msg(isrz003)'
+        end
+        if zerrsm = null then do
+          direction = word(zcmd,3)
+          if pos(direction,'AD') = 0 then do
+            zerrsm = 'Invalid.'
+            zerrlm = 'Sort order of' direction 'is not valid - try A or D'
+            'setmsg msg(isrz003)'
+          end
+        end
+        if zerrsm = null then do
+          if direction = null then direction = 'A'
+          'tbsort' cbtdd 'fields('field','stype','direction')'
+          ctop = 0
+        end
       end
     end
     When zcmd = 'SPECIAL' then do
