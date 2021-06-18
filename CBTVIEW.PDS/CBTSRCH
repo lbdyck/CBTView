@@ -63,13 +63,14 @@
   014 2021-05-17  Free file001 after load.
                   Rewrite LOAD, slight performance improvement.
   015 2021-05-18  New parm DATA(COV) for accessing overflow data.
+  016 2021-06-18  Som data check.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='015 2021-05-18'
+ cbtsver='016 2021-06-18'
  Address ispexec "control errors return"
  "delstack"
 
@@ -334,6 +335,11 @@ LCmd:                          /* linecmd, pnlline nr, dataline nr */
  Select
    when lcmd='S'  then do
      cbtn=substr(idad.lcdln,4,4)
+     if datatype(cbtn)<>'NUM' then do                                  /*016.1*/
+       say 'Cbtnum in' strip(translate(idad.lcdln,'?',xrange('11'x,'18'x)))
+       say 'is not numeric, please report'
+       return SetField(lcdln,'sel',lcmd,idaai3)
+     end
      fn=cbtn+0
      if dsns.fn='' then return lmsg('File' cbtn 'is not available')+1
      lcds=GetDsn(fn)
@@ -343,7 +349,7 @@ LCmd:                          /* linecmd, pnlline nr, dataline nr */
    end
    when lcmd='L'  then lcrc = LcList()
    when lcmd='F'  then lcrc = Fetch()
-   when lcmd='Z'  then say translate(idad.lcdln,'?',xrange('11'x,'17'x))
+   when lcmd='Z'  then say translate(idad.lcdln,'?',xrange('11'x,'18'x))
    otherwise lcrc=lmsg('Invalid line command' lcmd)+1
  end
  if lcrc=0 then return SetField(lcdln,'sel',' ',idaai1)
