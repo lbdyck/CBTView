@@ -73,7 +73,7 @@
 
   call check_overrides
 
-  if volser /= null then volser = 'VOLSER('volser')'
+  if volser /= null then volser = 'VOLUME('volser')'
 
   x = listdsi("'"hlq".FILEIDX.PDS'")
   if x > 0 then do
@@ -162,7 +162,7 @@ Get_Files:
   call outtrap 'off'
 
   'alloc ds('zos') new spa('space','space') tr dsorg(ps)' ,
-    'recfm(f b) lrecl(80) blksize(32720)'
+    'recfm(f b) lrecl(80) blksize(32720)' volser
   'free ds('zos')'
   from_dir = '/tmp/'archive
   'oget' "'"from_dir"'" zos 'Binary'
@@ -187,7 +187,7 @@ Get_Files:
 
     'newstack'
     queue "dsn('"zospds"') sysout("sysout")" volser
-    x = PROMPT('ON')
+    x = PROMPT('OFF')
     call outtrap 'x.'
     "Receive inds("zos")"
     erc = rc
