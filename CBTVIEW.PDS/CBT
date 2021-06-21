@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.46'
+  ver = '1.47'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-06-21 LBD 1.47                                  |
+  |                     Fix alignment in CBTINDEX             |
   |      2021-06-20 LBD 1.46                                  |
   |                     Add FLIP to the / command menu        |
   |      2021-06-17 LBD 1.45                                  |
@@ -1234,7 +1236,7 @@ FTP_DSN:
       if file = word(idx.mi,1) then do
         fdw = wordpos(file,update_files)
         fdate = word(update_files,fdw+1)
-        idx.mi = file left(updates.file,64) fdate
+        idx.mi = left(file,4) left(updates.file,64) fdate
         fupflg = null
         online = '*'
         Address ISPExec ,
