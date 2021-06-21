@@ -249,10 +249,12 @@ $INSTALL   REXX Installation Dialog to allocate the hlq.FILEIDX.PDS
            and then copy the key members from this PDS to it
 $INSTALP   ISPF Panel used by $INSTALL
 CBT        The CBTTape ISPF Application - try it - you'll like it.
-CBTCONFG   Site customization data for the CBT ISPF Application.
+CBTCONFG   Site customization data for the CBT ISPF Application, and
+           for CBTDOWN use.
 CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL, or a single file
            of the CBT files (File 001 is excluded as it should already be
            downloaded as it is used to create CBTINDEX).
+           ** Uses the CBTCONFG for SYSOUT and VOLSER overrides
 CBTDOWNJ   Sample JCL to run CBTDOWN.
 CBTSRCH    Enhanced Search dialog by Willy Jensen
 CBTSRCH$   Installation and use instructions for CBTSRCH

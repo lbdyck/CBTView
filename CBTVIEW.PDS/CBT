@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.45'
+  ver = '1.46'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-06-20 LBD 1.46                                  |
+  |                     Add FLIP to the / command menu        |
   |      2021-06-17 LBD 1.45                                  |
   |                     Correct Search words                  |
   |      2021-06-16 LBD 1.44                                  |
@@ -3098,7 +3100,7 @@ $t2      +Build:       @cbtinfo
   + type(text) intens(low) skip(on)
   @ type(output) intens(high) color(turq )
   ] type(output) caps(off) pas(on) intens(high) color(white) hilite(uscore)
-)Body Window(44,12)
+)Body Window(44,13)
 +Enter Command:_z           +
 +
 +Value for Find, Only, Search, and Sort:
@@ -3106,10 +3108,11 @@ $t2      +Build:       @cbtinfo
 +
  ]ds+       ]info+     ]only+     ]search+
  ]esearch+  ]find+     ]locate+   ]rebuild+
- ]site+     ]history+  ]new+      ]refresh+
- ]sort+     ]current+  ]overflow+ ]update+
- ]about+
-           +Or%F3+to cancel.
+ ]site+     ]flip+     ]new+      ]refresh+
+ ]sort+     ]history+  ]overflow+ ]update+
+ ]about+    ]current+
++
+             +Or%F3+to cancel.
 )Init
  &zwinttl = 'CBT Command Options'
  .zvars = '(zcmd)'
@@ -3119,6 +3122,7 @@ $t2      +Build:       @cbtinfo
  &esearch  = 'ESearch'
  &about    = 'About  '
  &Find     = 'Find   '
+ &Flip     = 'FLip   '
  &Sort     = 'SOrt   '
  &History  = 'History'
  &Info     = 'Info   '
@@ -3138,9 +3142,10 @@ $t2      +Build:       @cbtinfo
 if resp = 'END' then exit
   if zcmd /= '' then
   Select
-    When left(zcmd,1) = 'F' then tzcmd = 'FIND'
-    When left(zcmd,1) = 'S' then tzcmd = 'SORT'
-    When left(zcmd,1) = 'L' then tzcmd = 'LOCATE'
+    When left(zcmd,2) = 'FL' then tzcmd = 'FLIP'
+    When left(zcmd,1) = 'F'  then tzcmd = 'FIND'
+    When left(zcmd,1) = 'S'  then tzcmd = 'SORT'
+    When left(zcmd,1) = 'L'  then tzcmd = 'LOCATE'
     When left(zcmd,2) /= 'OV' then
     if left(zcmd,1) = 'O' then tzcmd = 'ONLY'
     Otherwise tzcmd = ''
@@ -3165,6 +3170,7 @@ if zcmd = ''
  FIELD(esearch  ) VAR(zcmd) VAL('ES      ')
  FIELD(About    ) VAR(zcmd) VAL('ABOUT   ')
  FIELD(Find     ) VAR(zcmd) VAL('FIND    ')
+ FIELD(Flip     ) VAR(zcmd) VAL('FLIP    ')
  FIELD(History  ) VAR(zcmd) VAL('HISTORY ')
  FIELD(Info     ) VAR(zcmd) VAL('INFO    ')
  FIELD(Locate   ) VAR(zcmd) VAL('LOCATE  ')
