@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.47'
+  ver = '1.48'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,14 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-06-30 LBD 1.48                                  |
+  |                     Flag files as new if updated in the   |
+  |                     CBT Release                           |
+  |                     Check CBT Release Version file        |
+  |                     Don't check for new version if ftp    |
+  |                     is not enabled (update=0)             |
+  |                     Update REBUILD Prompt prose.          |
+  |                     Replace Site with Local command       |
   |      2021-06-21 LBD 1.47                                  |
   |                     Fix alignment in CBTINDEX             |
   |      2021-06-20 LBD 1.46                                  |
@@ -216,7 +224,7 @@
 
   parse value '' with null load_info rfind_opt tab_open ftptype ,
     load_info update_files updates. unzip_ok ftp_ok dsn sort_toggle ,
-    special
+    special cbtver
 
   /* ---------------------------------------------------- *
   | CBT Exec Defaults                                    |
@@ -302,6 +310,19 @@ ReStart:
   zerralrm = 'NO'
   zerrtp   = 'Notify'
 
+  /* -------------------------------------- *
+  | Get the version of the CBTTape we have |
+  * -------------------------------------- */
+  cbtover = null
+  if sysdsn("'"cbthlq".FILEIDX.PDS(ZVER)'") = 'OK' then do
+    Address TSO
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    'execio * diskr' cbtdd '(finis stem zver.'
+    cbtover = strip(zver.1)
+    'free f('cbtdd')'
+    Address ISPExec
+  end
+
   /* ------------------------------------------------------- *
   | Read the CBT Index file and create an ISPF table of all |
   | CBT files for searching and selection.                  |
@@ -342,14 +363,14 @@ Do_Index:
 
   Address ISPExec
   call Enable_Rfind
-  'tbcreate' cbtdd 'names(file desc online fupflg fdate) nowrite'
+  'tbcreate' cbtdd 'names(file desc online fupflg fdate vuflag) nowrite'
   tab_open = 1
   cbtv = null
   drop idx_file.
 
   update_count = 0
   do i = 1 to idx.0
-    parse value idx.i with file desc 69 fdate .
+    parse value idx.i with file desc 69 fdate vuflag
     if cbtv = null then cbtv = strip(fdate)
     fupflg = null
     file = strip(file)
@@ -360,9 +381,7 @@ Do_Index:
     then online = null
     else online = '*'
     idx_file.file = 1
-    if wordpos(file,update_files) = 0
-    then fupflg = null
-    else do
+    if wordpos(file,update_files) > 0 then do
       desc = strip(updates.file)
       if left(fdate,1) /= 'V' then do
         w = wordpos(file,update_files)
@@ -382,6 +401,11 @@ Do_Index:
         w = wordpos(file,update_files)
         fdate = word(update_files,w+1)
       end
+    end
+    else if vuflag = '#' & online = null then do
+      fupflg = '+'
+      update_count =  update_count + 1
+      update_files = update_files file fdate
     end
     if special /= 1 then
     if desc = 'EMPTY' then iterate
@@ -423,8 +447,44 @@ Do_Index:
     'free f('cbtdd')'
     Address ISPExec
   end
+  if cbtover = null then do
+    Address TSO
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILE001.DATA')"
+    'execio * diskr' cbtdd '(finis stem zver.'
+    'free f('cbtdd')'
+    do cbti = 1 to zver.0
+       if left(zver.cbti,3) /= '//*' then iterate
+       if pos('VERSION #',zver.cbti) = 0 then iterate
+       parse value zver.cbti with . 'VERSION #'cbtover .
+       cbtover = strip(cbtover)
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    drop zver.
+    zver.1 = cbtover
+    zver.0 = 1
+    'execio * diskw' cbtdd '(finis stem zver.'
+    'free f('cbtdd')'
+    drop zver.
+  end
+  Address ISPExec
+  end
 
-  if update_count > 0 then do
+  /* ----------------------------- *
+   | Check for a new CBT Version.  |
+   | if not                        |
+   | then Check for updated files. |
+   * ----------------------------- */
+  if update = 1 then
+  if cbtover /= cbtver then
+  if cbtover /= null then do
+    zerrsm = 'New CBT Version.'
+    zerrlm = 'CBT Version' cbtver 'is now available. You should' ,
+      'download FILE001 and then use the REBUILD command to referesh' ,
+      'the CBT Index used by this dialog along with all the FILEnnn' ,
+      'members. Your current version is:' cbtover
+    'setmsg msg(isrz003)'
+  end
+  if cbtover = cbtver then
+    if update_count > 0 then do
     zerrsm = 'Updates.'
     zerrlm = update_count 'updated files are available. Use the' ,
       'Update command to retrieve all updated files, or the U selection to' ,
@@ -557,21 +617,18 @@ Do_Select:
     if drc > 0 then return
   end
   if csel = 'S' then csel = ispfact
-  Address TSO
   if pos(csel,'BCERVUP') > 0 then do
     zerrsm = null
-    x = get_dsn()
-    if x > 0 then do
-      Address ISPExec
-      if zerrsm /= null then return 4
+    dsn = get_file()
+    if ftp_ok = 0 then do
       zerrsm = 'Not Available.'
       zerrlm = 'File' file 'is not available and FTP is not enabled.'
       'setmsg msg(isrz003)'
       csel = null
       return 4
     end
+    else call get_dsn
   end
-  Address ISPExec
   Select
     When csel = 'B' then call BEV 'BROWSE'
     When csel = 'C' then call do_copy
@@ -592,10 +649,13 @@ Do_Select:
         'Setmsg msg(isrz003)'
       end
       else do
+        dsn = get_file()
+        if x = 0 then do
         if sysdsn("'"dsn"'") = 'OK' then do
           Address TSO
           x = del_rename(dsn)
           Address ISPExec
+        end
         end
         call outtrap 'x.'
         Address TSO "Delete '"dsn"'"
@@ -609,7 +669,7 @@ Do_Select:
         if csels = 1 then do
           zerrsm = 'Updated.'
           zerrlm = 'The requested file(s) has been updated with a clean' ,
-            'copy from the CBTTape website.'
+            'copy from the CBTTape® website.'
           if backup = 1 then
           if renamec > 0 then zerrlm = zerrlm 'The previous dataset was' ,
             'renamed.'
@@ -712,7 +772,7 @@ Do_ZCMD:
     call do_new
     When abbrev("REBUILD",word(zcmd,1),3) = 1 then do
       call pfshow 'off'
-      'Addpop row(4) column(8)'
+      'Addpop row(4) column(3)'
       'Display Panel(cbtpopqr)'
       drc = rc
       'Rempop'
@@ -735,10 +795,12 @@ Do_ZCMD:
     end
     When abbrev('SEARCH',translate(word(zcmd,1)),1) = 1 then
     call do_search
-    When abbrev('SITE',translate(word(zcmd,1)),2) = 1 then
-    call do_site
+    When abbrev('LOCAL',translate(word(zcmd,1)),2) = 1 then
+    call Do_Local
     When abbrev('ONLINE',translate(word(zcmd,1)),4) = 1 then
-    call do_site
+    call Do_Local
+    When abbrev('SITE',translate(word(zcmd,1)),2) = 1 then
+    call Do_Local
     When abbrev('UPDATE',translate(word(zcmd,1)),3) = 1 then do
       if update = 1 then do
         if update_count = 0 then do
@@ -848,7 +910,7 @@ Get_DSN:
   x = get_file()
   if x = 0 then do
     if sysvar('SYSISPF') /= 'ACTIVE' then return
-    if wordpos(file,update_files) > 0 then ftptype = 'X'
+    if wordpos(file,update_files) > 0 then ftptype = 'UPDATE'
     x = ftp_dsn()
     ftptype = null
     if x > 0 then return 4
@@ -1029,7 +1091,7 @@ Do_New:
   /* ----------------------------- *
   | Display only the Online files |
   * ----------------------------- */
-Do_Site:
+Do_Local:
   'tbtop' cbtdd
   do forever
     'tbskip' cbtdd
@@ -1140,9 +1202,9 @@ Do_Search:
   'setmsg msg(isrz003)'
   return
 
-    /* ----------------------------------------------- *
-    | List out all the CBT Files in ISPF 3.4 (DSLIST) |
-    * ----------------------------------------------- */
+  /* ----------------------------------------------- *
+  | List out all the CBT Files in ISPF 3.4 (DSLIST) |
+  * ----------------------------------------------- */
 Do_DSList:
   Address ISPExec
   "LMDINIT LISTID(LISTID) LEVEL("cbthlq"."file_pfx"*)"
@@ -1150,9 +1212,9 @@ Do_DSList:
   "LMDFREE LISTID("ListId")"
   return
 
-    /* ---------------------------------------- *
-    | Display the change history for this exec |
-    * ---------------------------------------- */
+  /* ---------------------------------------- *
+  | Display the change history for this exec |
+  * ---------------------------------------- */
 Do_History:
   lines = sourceline()
   drop hist.
@@ -1180,9 +1242,9 @@ Do_History:
   address tso 'free f('cbtdd')'
   Return
 
-    /* ------------------------------ *
-    | Display basic help information |
-    * ------------------------------ */
+  /* ------------------------------ *
+  | Display basic help information |
+  * ------------------------------ */
 Do_Help:
   say ' '
   say 'The Official CBT ISPF Dialog'
@@ -1261,12 +1323,12 @@ FTP_DSN:
   end
   Return 0
 
-    /* ---------------------------------------------------- *
-    | Perform the FTP to get the file from www.cbttape.org |
-    * ---------------------------------------------------- */
+  /* ---------------------------------------------------- *
+  | Perform the FTP to get the file from www.cbttape.org |
+  * ---------------------------------------------------- */
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx
+    zip_pfx fupflg fdate
   arg file
 
   if update = 0 then return 4
@@ -1306,6 +1368,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   Address ISPExec
   ms1 = 'Initiating FTP from WWW.CBTTAPE.ORG'
   ms2 = 'for file:' get_file
+  if left(fdate,1) /= 'V' then
   if fupflg /= null
   then ms3 = 'Downloading the Updated version of the file.'
   else ms3 = null
@@ -1393,9 +1456,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     x = PROMPT('ON')
     call outtrap 'x.'
     "Receive inds("zos")"
-    call outtrap 'off'
     'delstack'
-    call outtrap 'x.'
     'delete' zos
     call outtrap 'off'
     x = update_filennn(file)
@@ -1407,9 +1468,9 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   dsn = zospds
   return 0
 
-    /* ----------------------------------------------------------------- *
-    | Rename the existing dataset with it's creation date               |
-    * ----------------------------------------------------------------- */
+  /* ----------------------------------------------------------------- *
+  | Rename the existing dataset with it's creation date               |
+  * ----------------------------------------------------------------- */
 Del_Rename: procedure expose renamec backup
   arg rename_dsn
   renamec = renamec + 1
@@ -1426,9 +1487,9 @@ Del_Rename: procedure expose renamec backup
   end
   return 0
 
-    /* ------------------------ *
-    | Process the OMVS command |
-    * ------------------------ */
+  /* ------------------------ *
+  | Process the OMVS command |
+  * ------------------------ */
 Do_Command:
   parse arg cmd
   if datatype(env.0) /= 'NUM' then call get_env
@@ -1446,9 +1507,9 @@ Get_Env:
   drop e.
   return
 
-    /* ----------------------------------------- *
-    | Write the command file out in OMVS format |
-    * ----------------------------------------- */
+  /* ----------------------------------------- *
+  | Write the command file out in OMVS format |
+  * ----------------------------------------- */
 Write_Command_File:
   arg wcf_opt
   drop ftp.
@@ -1476,6 +1537,9 @@ Write_Command_File:
   if wcf_opt = 'UPDATE' then do
     if ftptype = null then do
       if file_pfx = 'FILE' then do
+        call add_ftp 'cd cbt'
+        call add_ftp 'get $$$$$$$$ (replace'
+        call add_ftp 'cd ..'
         call add_ftp 'cd updates'
         call add_ftp 'dir CBT*.zip'
         call add_ftp 'get UPDATESTOC.txt' userid()'_toc  (replace'
@@ -1489,25 +1553,26 @@ Write_Command_File:
   end
   call add_ftp 'quit'
   ftp.0 = ftpc
-    /* ---------------------------------- *
-    | Write the commands to omvs for use |
-    * ---------------------------------- */
+
+  /* ---------------------------------- *
+  | Write the commands to omvs for use |
+  * ---------------------------------- */
   Address syscall "writefile (cmd_file) 777 ftp."
   drop ftp.
   return
 
-    /* ------------------------------- *
-    | Add ftp command to command file |
-    * ------------------------------- */
+  /* ------------------------------- *
+  | Add ftp command to command file |
+  * ------------------------------- */
 add_ftp:
   parse arg ftp_opt
   ftpc = ftpc + 1
   ftp.ftpc = ftp_opt
   return
 
-    /* -------------------------------- *
-    | Switch to the CBT Overflow files |
-    * -------------------------------- */
+  /* -------------------------------- *
+  | Switch to the CBT Overflow files |
+  * -------------------------------- */
 Do_Overflow:
   if file_pfx = 'COV' then do
     zerrsm = 'Ignored.'
@@ -1530,9 +1595,9 @@ Do_Overflow:
   call do_index
   Return 0
 
-    /* ------------------------------ *
-    | Switch to the Normal CBT Files |
-    * ------------------------------ */
+  /* ------------------------------ *
+  | Switch to the Normal CBT Files |
+  * ------------------------------ */
 Do_CBT:
   if file_pfx = 'FILE' then do
     zerrsm = 'Ignored.'
@@ -1555,9 +1620,9 @@ Do_CBT:
   call do_index
   Return 0
 
-    /* ----------------------- *
-    | Refresh the Index Table |
-    * ----------------------- */
+  /* ----------------------- *
+  | Refresh the Index Table |
+  * ----------------------- */
 Do_Refresh:
   arg doropt
   if doropt = null then
@@ -1573,22 +1638,22 @@ Do_Refresh:
   string = null
   Return
 
-    /* ------------------------------------------------------ *
-    | Do UPDATE routine to update for updated files in the   |
-    | www.cbttape.org /pub/updates directory.                |
-    |                                                        |
-    | FILEIDX.PDS member zDATE is the date of the last update |
-    | process.                                               |
-    |                                                        |
-    | All files newer than the last update date will be:     |
-    |   - downloaded                                         |
-    |   - unzip'd                                            |
-    |   - oget to z/OS                                       |
-    |   - Received                                           |
-    |   - the @FILExxx member processed and added/updated to |
-    |     the FILEIDX.PDS                                    |
-    |   - update the CBTINDEX member with the new file date  |
-    * ------------------------------------------------------ */
+  /* ------------------------------------------------------ *
+  | Do UPDATE routine to update for updated files in the   |
+  | www.cbttape.org /pub/updates directory.                |
+  |                                                        |
+  | FILEIDX.PDS member zDATE is the date of the last update |
+  | process.                                               |
+  |                                                        |
+  | All files newer than the last update date will be:     |
+  |   - downloaded                                         |
+  |   - unzip'd                                            |
+  |   - oget to z/OS                                       |
+  |   - Received                                           |
+  |   - the @FILExxx member processed and added/updated to |
+  |     the FILEIDX.PDS                                    |
+  |   - update the CBTINDEX member with the new file date  |
+  * ------------------------------------------------------ */
 Do_Update:
   arg update_opt
   renamec = 0
@@ -1606,6 +1671,40 @@ Do_Update:
     '&& rm' cmd_file
   x = do_command(cmd)
 
+  /* ------------------------------------------------------- *
+  | Read in the $$$$$$$$ file which contains the CBT Tape   |
+  | version. Then delete it (since the file has $ they must |
+  | be escaped with a \.                                    |
+  * ------------------------------------------------------- */
+  address syscall 'readfile /tmp/$$$$$$$$' 'so.'
+  x = bpxwunix('rm /tmp/\$\$\$\$\$\$\$\$',,o.,e.)
+  parse value so.3 with '//*VERSION' cbtver .
+  cbtver = strip(cbtver)
+
+  /* ------------------------------------------------------ *
+  | Check to see if the cbtver is newer than the last      |
+  | one.                                                   |
+  * ------------------------------------------------------ */
+  if sysdsn("'"cbthlq".FILEIDX.PDS(ZVER)'") = 'OK' then do
+    Address TSO
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    'execio * diskr' cbtdd '(finis stem zver.'
+    'free f('cbtdd')'
+  end
+  else do
+    Address TSO
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    zver.0 = 1
+    zver.1 = cbtver
+    'execio * diskw' cbtdd '(finis stem zver.'
+    'free f('cbtdd')'
+  end
+  Address ISPExec
+
+  /* ----------------------------------------------------- *
+  | Check to see when the last UPDATE check was performed |
+  | and save that date.                                   |
+  * ----------------------------------------------------- */
   if sysdsn("'"cbthlq".FILEIDX.PDS(ZDATE)'") = 'OK' then do
     Address TSO
     "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZDATE)')"
@@ -1662,13 +1761,13 @@ Do_Update:
   'Rempop'
   if drc > 0 then do
     zerrsm = 'Canceled.'
-    zerrlm = 'CBTTape Update request canceled.'
+    zerrlm = 'CBTTape® Update request canceled.'
     address ispexec 'Setmsg msg(isrz003)'
     return drc
   end
 
   download = null
-  ftptype = 'U'
+  ftptype = 'UPDATE'
   'vput (ftptype)'
 
   do gi = 1 to words(update_files) by 2
@@ -1701,9 +1800,9 @@ Do_Update:
   'setmsg msg(isrz003)'
   return
 
-    /* ------------------------------------------- *
-    | Now update the Index with the updated files |
-    * ------------------------------------------- */
+  /* ------------------------------------------- *
+  | Now update the Index with the updated files |
+  * ------------------------------------------- */
 Update_Index:
   idc = 0
   drop ido.
@@ -1755,10 +1854,10 @@ Update_Index:
   Address ISPExec
   return 0
 
-    /* ------------------------------------------------------ *
-    | Update the FILEnnnn member in the FILEIDX.PDS from the |
-    | @FILEnnnn member of the retrieved PDS.                 |
-    * ------------------------------------------------------ */
+  /* ------------------------------------------------------ *
+  | Update the FILEnnnn member in the FILEIDX.PDS from the |
+  | @FILEnnnn member of the retrieved PDS.                 |
+  * ------------------------------------------------------ */
 Update_Filennn:
   arg file
   save_addr = address()
@@ -1784,9 +1883,9 @@ Update_Filennn:
   Address ISPExec
   return 0
 
-    /* ----------------- *
-    | Copy the CBT file |
-    * ----------------- */
+  /* ----------------- *
+  | Copy the CBT file |
+  * ----------------- */
 Do_Copy:
   dsn = "'"dsn"'"
   newdsn = dsn
@@ -1822,15 +1921,15 @@ Do_Copy:
   'Setmsg msg(isrz003)'
   return
 
-    /* ------------------------------------------------------ *
-    | The pfshow routine will:                               |
-    | 1. update to see the passed option                     |
-    | 2. if Off then it will save the current pfshow setting |
-    |    - save the current setting                          |
-    |    - turn off pfshow                                   |
-    | 3. if the option is Reset then it will                 |
-    |    - test if pfshow was on and turn it back on         |
-    * ------------------------------------------------------ */
+  /* ------------------------------------------------------ *
+  | The pfshow routine will:                               |
+  | 1. update to see the passed option                     |
+  | 2. if Off then it will save the current pfshow setting |
+  |    - save the current setting                          |
+  |    - turn off pfshow                                   |
+  | 3. if the option is Reset then it will                 |
+  |    - test if pfshow was on and turn it back on         |
+  * ------------------------------------------------------ */
 pfshow:
   if zpfshow = 'OFF' then return
   arg pfkopt
@@ -1846,9 +1945,9 @@ pfshow:
   end
   Return
 
-    /* ---------------------------------------- *
-    | Common routine for normal (2 line) popup |
-    * ---------------------------------------- */
+  /* ---------------------------------------- *
+  | Common routine for normal (2 line) popup |
+  * ---------------------------------------- */
 Do_Popup:
   call pfshow 'off'           /* make sure pfshow is off */
   'Control Display Lock'
@@ -1858,11 +1957,11 @@ Do_Popup:
   call pfshow 'reset'         /* restore pfshow setting */
   return
 
-    /* ------------------------------------------------ *
-    | Build/Recreate the CBTIndex and FILEnnn members. |
-    | and remove the ZDATE member as it is no longer   |
-    | useful with the CBTINDEX rebuilt.                |
-    * ------------------------------------------------ */
+  /* ------------------------------------------------ *
+  | Build/Recreate the CBTIndex and FILEnnn members. |
+  | and remove the ZDATE member as it is no longer   |
+  | useful with the CBTINDEX rebuilt.                |
+  * ------------------------------------------------ */
 Build_Index:
   if tab_open = 1 then do
     Address ISPExec 'tbend' cbtdd
@@ -1895,9 +1994,9 @@ Build_Index:
   zerrlm = cbtindex 'has been created/recreated.'
   'setmsg msg(isrz003)'
 
-    /* ------------------------------------- *
-    | If the FILEIDX is a PDS do a Compress |
-    * ------------------------------------- */
+  /* ------------------------------------- *
+  | If the FILEIDX is a PDS do a Compress |
+  * ------------------------------------- */
   x = listdsi("'"cbthlq".FILEIDX.PDS'" "DIR")
   if SYSADIRBLK = 'NO_LIM' then return
   "lminit dataid(lmcomp) dataset('"cbthlq".FILEIDX.PDS') enq(exclu)"
@@ -1905,114 +2004,114 @@ Build_Index:
   'lmfree dataid('lmcomp')'
   return
 
-    /* --------------------  rexx procedure  -------------------- *
-    * Name:      LoadISPF                                        *
-    *                                                            *
-    * Function:  Load ISPF elements that are inline in the       *
-    *            REXX source code.                               *
-    *                                                            *
-    * Syntax:    load_info = loadispf()                          *
-    *            rc = dropispf(load_info)                        *
-    *                                                            *
-    *            The inline ISPF resources are limited to        *
-    *            ISPF Messages, Panels, and Skeletons,           *
-    *                 CLISTs and EXECs are also supported.       *
-    *                                                            *
-    *            The inline resources must start in column 1     *
-    *            and use the following syntax:                   *
-    *                                                            *
-    *            >START    used to indicate the start of the     *
-    *                      inline data                           *
-    *                                                            *
-    *            >END    - used to indicate the end of the       *
-    *                      inline data                           *
-    *                                                            *
-    *            Each resource begins with a type record:        *
-    *            >type name                                      *
-    *               where type is CLIST, EXEC, MSG, PANEL, SKEL  *
-    *                     name is the name of the element        *
-    *                                                            *
-    * Sample usage:                                              *
-    *          -* rexx *-                                        *
-    *          load_info = loadispf()                            *
-    *          ... magic code happens here (your code) ...       *
-    *          rc = dropispf(load_info)                          *
-    *          exit                                              *
-    *          >Start inline elements                            *
-    *          >Panel panel1                                     *
-    *          ...                                               *
-    *          >Msg msg1                                         *
-    *          ...                                               *
-    *          >End of inline elements                           *
-    *                                                            *
-    * Returns:   the list of ddnames allocated for use along     *
-    *            with the libdef's performed or altlib           *
-    *                                                            *
-    *            format is ddname libdef ddname libdef ...       *
-    *                   libdef may be altlibc or altlibe         *
-    *                   for altlib clist or altlib exec          *
-    *                                                            *
-    * Notes:     Entire routine must be included with REXX       *
-    *            exec - inline with the code.                    *
-    *                                                            *
-    * Comments:  The entire rexx program is processed from the   *
-    *            last record to the first to find the >START     *
-    *            record at which point all records from that     *
-    *            point on are processed until the >END           *
-    *            statement or the end of the program is found.   *
-    *                                                            *
-    *            It is *strongly* suggested that the inline      *
-    *            elements be at the very end of your code so     *
-    *            that the search for them is faster.             *
-    *                                                            *
-    *            Inline ISPTLIB or ISPLLIB were not supported    *
-    *            because the values for these would have to be   *
-    *            in hex.                                         *
-    *                                                            *
-    * Author:    Lionel B. Dyck                                  *
-    *                                                            *
-    * History:                                                   *
-    *            01/09/19 - Include DROPISPF routine             *
-    *            08/29/17 - Fixup static values that were vars   *
-    *            05/31/17 - Change default directory count       *
-    *            12/09/16 - update for add_it routine            *
-    *            05/10/16 - correction for clist and exec        *
-    *            04/19/16 - bug correction                       *
-    *            06/04/04 - Enhancements for speed               *
-    *            08/05/02 - Creation                             *
-    *                                                            *
-    * ---------------------------------------------------------- *
-    * Disclaimer: There is no warranty, either explicit or       *
-    * implied with this code. Use it at your own risk as there   *
-    * is no recourse from either the author or his employeer.    *
-    * ---------------------------------------------------------- */
+  /* --------------------  rexx procedure  -------------------- *
+  * Name:      LoadISPF                                        *
+  *                                                            *
+  * Function:  Load ISPF elements that are inline in the       *
+  *            REXX source code.                               *
+  *                                                            *
+  * Syntax:    load_info = loadispf()                          *
+  *            rc = dropispf(load_info)                        *
+  *                                                            *
+  *            The inline ISPF resources are limited to        *
+  *            ISPF Messages, Panels, and Skeletons,           *
+  *                 CLISTs and EXECs are also supported.       *
+  *                                                            *
+  *            The inline resources must start in column 1     *
+  *            and use the following syntax:                   *
+  *                                                            *
+  *            >START    used to indicate the start of the     *
+  *                      inline data                           *
+  *                                                            *
+  *            >END    - used to indicate the end of the       *
+  *                      inline data                           *
+  *                                                            *
+  *            Each resource begins with a type record:        *
+  *            >type name                                      *
+  *               where type is CLIST, EXEC, MSG, PANEL, SKEL  *
+  *                     name is the name of the element        *
+  *                                                            *
+  * Sample usage:                                              *
+  *          -* rexx *-                                        *
+  *          load_info = loadispf()                            *
+  *          ... magic code happens here (your code) ...       *
+  *          rc = dropispf(load_info)                          *
+  *          exit                                              *
+  *          >Start inline elements                            *
+  *          >Panel panel1                                     *
+  *          ...                                               *
+  *          >Msg msg1                                         *
+  *          ...                                               *
+  *          >End of inline elements                           *
+  *                                                            *
+  * Returns:   the list of ddnames allocated for use along     *
+  *            with the libdef's performed or altlib           *
+  *                                                            *
+  *            format is ddname libdef ddname libdef ...       *
+  *                   libdef may be altlibc or altlibe         *
+  *                   for altlib clist or altlib exec          *
+  *                                                            *
+  * Notes:     Entire routine must be included with REXX       *
+  *            exec - inline with the code.                    *
+  *                                                            *
+  * Comments:  The entire rexx program is processed from the   *
+  *            last record to the first to find the >START     *
+  *            record at which point all records from that     *
+  *            point on are processed until the >END           *
+  *            statement or the end of the program is found.   *
+  *                                                            *
+  *            It is *strongly* suggested that the inline      *
+  *            elements be at the very end of your code so     *
+  *            that the search for them is faster.             *
+  *                                                            *
+  *            Inline ISPTLIB or ISPLLIB were not supported    *
+  *            because the values for these would have to be   *
+  *            in hex.                                         *
+  *                                                            *
+  * Author:    Lionel B. Dyck                                  *
+  *                                                            *
+  * History:                                                   *
+  *            01/09/19 - Include DROPISPF routine             *
+  *            08/29/17 - Fixup static values that were vars   *
+  *            05/31/17 - Change default directory count       *
+  *            12/09/16 - update for add_it routine            *
+  *            05/10/16 - correction for clist and exec        *
+  *            04/19/16 - bug correction                       *
+  *            06/04/04 - Enhancements for speed               *
+  *            08/05/02 - Creation                             *
+  *                                                            *
+  * ---------------------------------------------------------- *
+  * Disclaimer: There is no warranty, either explicit or       *
+  * implied with this code. Use it at your own risk as there   *
+  * is no recourse from either the author or his employeer.    *
+  * ---------------------------------------------------------- */
 LoadISPF: Procedure
 
   parse value "" with null kmsg kpanel kskel first returns ,
     kclist kexec
-    /* ------------------------------------------------------- *
-    * Find the InLine ISPF Elements and load them into a stem *
-    * variable.                                               *
-    *                                                         *
-    * Elements keyword syntax:                                *
-    * >START - start of inline data                           *
-    * >CLIST name                                             *
-    * >EXEC name                                              *
-    * >MSG name                                               *
-    * >PANEL name                                             *
-    * >SKEL name                                              *
-    * >END   - end of all inline data (optional if last)      *
-    * ------------------------------------------------------- */
+  /* ------------------------------------------------------- *
+  * Find the InLine ISPF Elements and load them into a stem *
+  * variable.                                               *
+  *                                                         *
+  * Elements keyword syntax:                                *
+  * >START - start of inline data                           *
+  * >CLIST name                                             *
+  * >EXEC name                                              *
+  * >MSG name                                               *
+  * >PANEL name                                             *
+  * >SKEL name                                              *
+  * >END   - end of all inline data (optional if last)      *
+  * ------------------------------------------------------- */
   last_line = sourceline()
   do i = last_line to 1 by -1
     line = sourceline(i)
     if translate(left(line,6)) = ">START " then leave
   end
   rec = 0
-    /* --------------------------------------------------- *
-    * Flag types of ISPF resources by testing each record *
-    * then add each record to the data. stem variable.    *
-    * --------------------------------------------------- */
+  /* --------------------------------------------------- *
+  * Flag types of ISPF resources by testing each record *
+  * then add each record to the data. stem variable.    *
+  * --------------------------------------------------- */
   do j = i+1 to last_line
     line = sourceline(j)
     if translate(left(line,5)) = ">END "   then leave
@@ -2025,22 +2124,22 @@ LoadISPF: Procedure
     data.rec = line
   end
 
-    /* ----------------------------------------------------- *
-    * Now create the Library and Load the Member(s)         *
-    * ----------------------------------------------------- */
+  /* ----------------------------------------------------- *
+  * Now create the Library and Load the Member(s)         *
+  * ----------------------------------------------------- */
   Address ISPExec
-    /* ----------------------------- *
-    * Assign dynamic random ddnames *
-    * ----------------------------- */
+  /* ----------------------------- *
+  * Assign dynamic random ddnames *
+  * ----------------------------- */
   clistdd = "lc"random(999)
   execdd  = "le"random(999)
   msgdd   = "lm"random(999)
   paneldd = "lp"random(999)
   skeldd  = "ls"random(999)
 
-    /* ---------------------------------------- *
-    *  LmInit and LmOpen each resource library *
-    * ---------------------------------------- */
+  /* ---------------------------------------- *
+  *  LmInit and LmOpen each resource library *
+  * ---------------------------------------- */
   if kclist <> null then do
     call alloc_dd clistdd
     "Lminit dataid(clist) ddname("clistdd")"
@@ -2072,9 +2171,9 @@ LoadISPF: Procedure
     returns = strip(returns skeldd 'ISPSLIB')
   end
 
-    /* ----------------------------------------------- *
-    * Process all records in the data. stem variable. *
-    * ----------------------------------------------- */
+  /* ----------------------------------------------- *
+  * Process all records in the data. stem variable. *
+  * ----------------------------------------------- */
   do i = 1 to rec
     record = data.i
     recordu = translate(record)
@@ -2114,10 +2213,10 @@ LoadISPF: Procedure
       parse value record with x name
       iterate
     end
-      /* --------------------------------------------*
-      * Put the record into the appropriate library *
-      * based on the record type.                   *
-      * ------------------------------------------- */
+    /* --------------------------------------------*
+    * Put the record into the appropriate library *
+    * based on the record type.                   *
+    * ------------------------------------------- */
     Select
       When type = "Clist" then
       "LmPut dataid("clist") MODE(INVAR)" ,
@@ -2138,10 +2237,10 @@ LoadISPF: Procedure
     end
   end
   if type <> null then call add_it
-    /* ---------------------------------------------------- *
-    * Processing completed - now lmfree the allocation and *
-    * Libdef the library.                                  *
-    * ---------------------------------------------------- */
+  /* ---------------------------------------------------- *
+  * Processing completed - now lmfree the allocation and *
+  * Libdef the library.                                  *
+  * ---------------------------------------------------- */
   if kclist <> null then do
     Address TSO,
       "Altlib Act Application(Clist) File("clistdd")"
@@ -2166,10 +2265,10 @@ LoadISPF: Procedure
   end
   return returns
 
-    /* --------------------------- *
-    * Add the Member using LmmAdd *
-    * based upon type of resource *
-    * --------------------------- */
+  /* --------------------------- *
+  * Add the Member using LmmAdd *
+  * based upon type of resource *
+  * --------------------------- */
 Add_It:
   Select
     When type = "Clist" then
@@ -2187,9 +2286,9 @@ Add_It:
   type = null
   return
 
-    /* ------------------------------ *
-    * ALlocate the temp ispf library *
-    * ------------------------------ */
+  /* ------------------------------ *
+  * ALlocate the temp ispf library *
+  * ------------------------------ */
 Alloc_DD:
   arg dd
   Address TSO
@@ -2201,19 +2300,19 @@ Alloc_DD:
     "recfm(f b) lrecl(80) blksize(23440)"
   return
 
-    /* --------------------  rexx procedure  -------------------- *
-    * Name:      DropISPF                                        *
-    *                                                            *
-    * Function:  Remove ISPF LIBDEF's and deactivate ALTLIB's    *
-    *            that were created by the LoadISPF function.     *
-    *                                                            *
-    * Syntax:    rc = dropispf(load_info)                        *
-    *                                                            *
-    * Author:    Janko                                           *
-    *                                                            *
-    * History:                                                   *
-    *            12/05/18 - Creation                             *
-    * ---------------------------------------------------------- */
+  /* --------------------  rexx procedure  -------------------- *
+  * Name:      DropISPF                                        *
+  *                                                            *
+  * Function:  Remove ISPF LIBDEF's and deactivate ALTLIB's    *
+  *            that were created by the LoadISPF function.     *
+  *                                                            *
+  * Syntax:    rc = dropispf(load_info)                        *
+  *                                                            *
+  * Author:    Janko                                           *
+  *                                                            *
+  * History:                                                   *
+  *            12/05/18 - Creation                             *
+  * ---------------------------------------------------------- */
 DropISPF: Procedure
   arg load_info
   Address ISPEXEC
@@ -2247,23 +2346,23 @@ Get_Dataset_List: Procedure Expose cbthlq cbt_online null ,
   end
   return
 
-    /* --------------------  rexx procedure  -------------------- *
-    | Name:      SortStr                                         |
-    |                                                            |
-    | Function:  Sorts the provided string and returns it        |
-    |                                                            |
-    | Syntax:    string = sortstr(string)                        |
-    |                                                            |
-    | Usage:     Pass any string to SORTSTR and it will return   |
-    |            the string sorted                               |
-    |                                                            |
-    | Author:    Lionel B. Dyck                                  |
-    |                                                            |
-    | History:  (most recent on top)                             |
-    |            10/13/20 - Eliminate extra blank on last entry  |
-    |            09/19/17 - Creation                             |
-    |                                                            |
-    * ---------------------------------------------------------- */
+  /* --------------------  rexx procedure  -------------------- *
+  | Name:      SortStr                                         |
+  |                                                            |
+  | Function:  Sorts the provided string and returns it        |
+  |                                                            |
+  | Syntax:    string = sortstr(string)                        |
+  |                                                            |
+  | Usage:     Pass any string to SORTSTR and it will return   |
+  |            the string sorted                               |
+  |                                                            |
+  | Author:    Lionel B. Dyck                                  |
+  |                                                            |
+  | History:  (most recent on top)                             |
+  |            10/13/20 - Eliminate extra blank on last entry  |
+  |            09/19/17 - Creation                             |
+  |                                                            |
+  * ---------------------------------------------------------- */
 SortSTR: Procedure
   parse arg string
   do imx = 1 to words(string)-1
@@ -2282,37 +2381,37 @@ SortSTR: Procedure
   return strip(string)
 
 REXXCSI:
-    /* REXX */
-    /********************************************************************/
-    /*                                                                  */
-    /*       NAME: IGGCSIRX                                             */
-    /*DESCRIPTION: THIS REXX EXEC IS USED TO CALL THE CATALOG           */
-    /*             SEARCH INTERFACE.                                    */
-    /*      INPUT: FILTER-KEY, stem-name                                */
-    /*     OUTPUT: DSNTYPE  DSNAME  VOLSER                              */
-    /*                                                                  */
-    /* Code 'borrowed' from IBM's SYS1.SAMPLIB(IGGCSIRX)                */
-    /*                                                                  */
-    /* Modified by LBD to require a hlq on entry and return just        */
-    /*          the dsnames and to accept a stem name                   */
-    /*                                                                  */
-    /* CHANGE ACTIVITY:                                                 */
-    /* $01=OW39593,HDZ11F0,990904,SJPLMET: BUMP WORK AREA TO        @01A*/
-    /*              64,000 BYTES TO HANDLE CASES WHERE THE RETURN   @01A*/
-    /*              DATA FOR A GDG BASE CANNOT FIT IN A WORKAREA    @01A*/
-    /*              EVEN ON A RESUME.  THE EXAMPLE IS CHANGED TO    @01A*/
-    /*              STOP WHEN THIS HAPPENS AND ISSUE A MESSAGE.     @01A*/
-    /* $01=OW46614,HDZ11G0,010130,SJPLMET: CORRECT FAILURE TO       @02A*/
-    /*             DISPLAY ALL INFO WHEN THE FILTER KEY CONTAINS A  @02A*/
-    /*             GENERIC IN THE HLQ.                              @02A*/
-    /*                                                                  */
-    /********************************************************************/
+  /* REXX */
+  /********************************************************************/
+  /*                                                                  */
+  /*       NAME: IGGCSIRX                                             */
+  /*DESCRIPTION: THIS REXX EXEC IS USED TO CALL THE CATALOG           */
+  /*             SEARCH INTERFACE.                                    */
+  /*      INPUT: FILTER-KEY, stem-name                                */
+  /*     OUTPUT: DSNTYPE  DSNAME  VOLSER                              */
+  /*                                                                  */
+  /* Code 'borrowed' from IBM's SYS1.SAMPLIB(IGGCSIRX)                */
+  /*                                                                  */
+  /* Modified by LBD to require a hlq on entry and return just        */
+  /*          the dsnames and to accept a stem name                   */
+  /*                                                                  */
+  /* CHANGE ACTIVITY:                                                 */
+  /* $01=OW39593,HDZ11F0,990904,SJPLMET: BUMP WORK AREA TO        @01A*/
+  /*              64,000 BYTES TO HANDLE CASES WHERE THE RETURN   @01A*/
+  /*              DATA FOR A GDG BASE CANNOT FIT IN A WORKAREA    @01A*/
+  /*              EVEN ON A RESUME.  THE EXAMPLE IS CHANGED TO    @01A*/
+  /*              STOP WHEN THIS HAPPENS AND ISSUE A MESSAGE.     @01A*/
+  /* $01=OW46614,HDZ11G0,010130,SJPLMET: CORRECT FAILURE TO       @02A*/
+  /*             DISPLAY ALL INFO WHEN THE FILTER KEY CONTAINS A  @02A*/
+  /*             GENERIC IN THE HLQ.                              @02A*/
+  /*                                                                  */
+  /********************************************************************/
   ARG KEY stem
-    /********************************************************************/
-    /*                                                                  */
-    /*  INITIALIZE THE PARM LIST                                        */
-    /*                                                                  */
-    /********************************************************************/
+  /********************************************************************/
+  /*                                                                  */
+  /*  INITIALIZE THE PARM LIST                                        */
+  /*                                                                  */
+  /********************************************************************/
   MODRSNRC = SUBSTR(' ',1,4)        /*   CLEAR MODULE/RETURN/REASON  */
   CSIFILTK = SUBSTR(KEY,1,44)       /*   MOVE FILTER KEY INTO LIST   */
   CSICATNM = SUBSTR(' ',1,44)       /*   CLEAR CATALOG NAME          */
@@ -2324,28 +2423,28 @@ REXXCSI:
   CSIRESRV = SUBSTR(' ',1,1)        /*   CLEAR RESERVE CHARACTER     */
   CSINUMEN = '0001'X                /*   INIT NUMBER OF FIELDS       */
   CSIFLD1    = SUBSTR('VOLSER',1,8) /*   INIT FIELD 1 FOR VOLSERS    */
-    /********************************************************************/
-    /*                                                                  */
-    /*  BUILD THE SELECTION CRITERIA FIELDS PART OF PARAMETER LIST      */
-    /*                                                                  */
-    /********************************************************************/
+  /********************************************************************/
+  /*                                                                  */
+  /*  BUILD THE SELECTION CRITERIA FIELDS PART OF PARAMETER LIST      */
+  /*                                                                  */
+  /********************************************************************/
   CSIOPTS  = CSICLDI || CSIRESUM || CSIS1CAT || CSIRESRV
   CSIFIELD = CSIFILTK || CSICATNM || CSIRESNM || CSIDTYPS || CSIOPTS
   CSIFIELD = CSIFIELD || CSINUMEN || CSIFLD1
 
-    /********************************************************************/
-    /*                                                                  */
-    /*  INITIALIZE AND BUILD WORK ARE OUTPUT PART OF PARAMETER LIST     */
-    /*                                                                  */
-    /********************************************************************/
+  /********************************************************************/
+  /*                                                                  */
+  /*  INITIALIZE AND BUILD WORK ARE OUTPUT PART OF PARAMETER LIST     */
+  /*                                                                  */
+  /********************************************************************/
   WORKLEN = 256000    /* increased from 64000 LBD */
   DWORK = '0003E800'X || COPIES('00'X,WORKLEN-4)   /* LBD */
 
-    /********************************************************************/
-    /*                                                                  */
-    /*  INITIALIZE WORK VARIABLES                                       */
-    /*                                                                  */
-    /********************************************************************/
+  /********************************************************************/
+  /*                                                                  */
+  /*  INITIALIZE WORK VARIABLES                                       */
+  /*                                                                  */
+  /********************************************************************/
   RESUME = 'Y'
   PREVNAME = ''                   /* NO PREVIOUS NAME            @01A*/
   CATNAMET = SUBSTR(' ',1,44)
@@ -2353,29 +2452,29 @@ REXXCSI:
 
   stemc = 0    /* initialize the stem counter */
 
-    /********************************************************************/
-    /*                                                                  */
-    /*  SET UP LOOP FOR RESUME (IF A RESUME IS NCESSARY)                */
-    /*                                                                  */
-    /********************************************************************/
+  /********************************************************************/
+  /*                                                                  */
+  /*  SET UP LOOP FOR RESUME (IF A RESUME IS NCESSARY)                */
+  /*                                                                  */
+  /********************************************************************/
   DO WHILE RESUME = 'Y'
 
-      /********************************************************************/
-      /*                                                                  */
-      /*  ISSUE LINK TO CATALOG GENERIC FILTER INTERFACE                  */
-      /*                                                                  */
-      /********************************************************************/
+    /********************************************************************/
+    /*                                                                  */
+    /*  ISSUE LINK TO CATALOG GENERIC FILTER INTERFACE                  */
+    /*                                                                  */
+    /********************************************************************/
     ADDRESS LINKPGM 'IGGCSI00  MODRSNRC  CSIFIELD  DWORK'
 
     RESUME = SUBSTR(CSIFIELD,150,1) /* GET RESUME FLAG FOR NEXT LOOP */
     USEDLEN = C2D(SUBSTR(DWORK,9,4))   /* GET AMOUNT OF WORK AREA USED  */
     POS1=15                         /* STARTING POSITION             */
 
-      /********************************************************************/
-      /*                                                                  */
-      /*  PROCESS DATA RETURNED IN WORK AREA                              */
-      /*                                                                  */
-      /********************************************************************/
+    /********************************************************************/
+    /*                                                                  */
+    /*  PROCESS DATA RETURNED IN WORK AREA                              */
+    /*                                                                  */
+    /********************************************************************/
     DO WHILE POS1 < USEDLEN         /* DO UNTIL ALL DATA IS PROCESSED*/
       IF SUBSTR(DWORK,POS1+1,1) = '0'  /* IF CATALOG, EXTRACT CATALOG   */
       THEN DO                       /* NAME FOR LATER PRINTING   @02C*/
@@ -2386,11 +2485,11 @@ REXXCSI:
       DO                             /* CONTINUE WITH NEXT ENTRY @02A*/
         DNAME = SUBSTR(DWORK,POS1+2,44)  /* GET ENTRY NAME               */
 
-          /********************************************************************/
-          /*                                                                  */
-          /*  ASSIGN ENTRY TYPE NAME                                          */
-          /*                                                                  */
-          /********************************************************************/
+        /********************************************************************/
+        /*                                                                  */
+        /*  ASSIGN ENTRY TYPE NAME                                          */
+        /*                                                                  */
+        /********************************************************************/
         IF SUBSTR(DWORK,POS1+1,1) = 'C' THEN DTYPE = 'CLUSTER '
         ELSE
         IF SUBSTR(DWORK,POS1+1,1) = 'D' THEN DTYPE = 'DATA    '
@@ -2416,23 +2515,23 @@ REXXCSI:
         IF SUBSTR(DWORK,POS1+1,1) = 'W' THEN DTYPE = 'ATLVOL  ' /*@02A*/
         ELSE ,  /*  NO ENTRIES IN THE CATALOG - LOOK AT    */  /*@02A*/
           ITERATE /*  NEXT CATALOG NAME - GENERIC HLQ ONLY */  /*@02A*/
-          /********************************************************************/
-          /*                                                                  */
-          /*  HAVE NAME AND TYPE, GET VOLSER INFO.  IF WE FOUND A VALID TYPE  */
-          /*  FOR THIS CATALOG, NOW PRINT THE CATALOG NAME (FIRST ENTRY ONLY).*/
-          /*                                                                  */
-          /********************************************************************/
+        /********************************************************************/
+        /*                                                                  */
+        /*  HAVE NAME AND TYPE, GET VOLSER INFO.  IF WE FOUND A VALID TYPE  */
+        /*  FOR THIS CATALOG, NOW PRINT THE CATALOG NAME (FIRST ENTRY ONLY).*/
+        /*                                                                  */
+        /********************************************************************/
         IF CATNAME ^= CATNAMET THEN /* IF RESUME NAME MAY ALREADY   @02C*/
         DO                       /*    BE PRINTED                    */
-            /* COMMENT START
-            SAY 'CATALOG ' CATNAME    /* IF NOT, PRINT IT             @02C*/
+          /* COMMENT START
+          SAY 'CATALOG ' CATNAME    /* IF NOT, PRINT IT             @02C*/
           SAY ' '                                                 /*@02C*/
         COMMENT END */
         CATNAMET = CATNAME                                      /*@02C*/
       END                                                      /*@02C*/
       POS1 = POS1 + 46
       NUMVOL = C2D(SUBSTR(DWORK,POS1+4,2))/6 /* HOW MANY VOLSERS ?     */
-        /*                               */
+      /*                               */
       POS2 = POS1+6                 /* POSITION ON DATA              */
       DO I=1 TO 3                   /* ONLY CLEAR 3 VOLSER FIELDS    */
         VOLSER.I = SUBSTR(' ',1,6)
@@ -2447,14 +2546,14 @@ REXXCSI:
         interpret 'stem.stemc =' ,
           "COPIES(' ',8)" "'"DTYPE DNAME VOLSER.1 VOLSER.2 VOLSER.3 "'"
       end
-        /* Comment Start
-        SAY COPIES(' ',8) DTYPE DNAME VOLSER.1 VOLSER.2 VOLSER.3
-        Comment End */
-        /********************************************************************/
-        /*                                                                  */
-        /*   GET POSITION OF NEXT ENTRY                                     */
-        /*                                                                  */
-        /********************************************************************/
+      /* Comment Start
+      SAY COPIES(' ',8) DTYPE DNAME VOLSER.1 VOLSER.2 VOLSER.3
+      Comment End */
+      /********************************************************************/
+      /*                                                                  */
+      /*   GET POSITION OF NEXT ENTRY                                     */
+      /*                                                                  */
+      /********************************************************************/
       POS1 = POS1 + C2D(SUBSTR(DWORK,POS1,2))
     END                             /* OF ROOM LEFT IN WORKAREA  @02A*/
   END
@@ -2470,31 +2569,31 @@ REXXCSI:
     RETURN 0
 
   BLDIndex: Procedure Expose cbthlq null ,
-      zerrhm zerralrm zerrtp file_pfx idxmem zip_pfx
-  /* --------------------  rexx procedure  -------------------- *
-  | Name:      BLDINDEX                                        |
-  |                                                            |
-  | Function:  Read the CBT File 001 and split out the         |
-  |            CBTINDEX and each File doc into individual      |
-  |            PDS members.                                    |
-  * ---------------------------------------------------------- */
+      zerrhm zerralrm zerrtp file_pfx idxmem zip_pfx cbtdd
+    /* --------------------  rexx procedure  -------------------- *
+    | Name:      BLDINDEX                                        |
+    |                                                            |
+    | Function:  Read the CBT File 001 and split out the         |
+    |            CBTINDEX and each File doc into individual      |
+    |            PDS members.                                    |
+    * ---------------------------------------------------------- */
 
     cbt_file001 = "'"cbthlq"."file_pfx"001.DATA'"
     cbt_index   = cbthlq".FILEIDX.PDS"
 
     dd = 'cbt'time('s')
 
-  /* ---------------- *
-  | Read in File 001 |
-  * ---------------- */
+    /* ---------------- *
+    | Read in File 001 |
+    * ---------------- */
     Address TSO
     'alloc f('dd') shr reuse ds('cbt_file001')'
     'execio * diskr' dd '(finis stem in.'
     'free f('dd')'
 
-  /* ------------------------------ *
-  | Find the File Index 1st record |
-  * ------------------------------ */
+    /* ------------------------------ *
+    | Find the File Index 1st record |
+    * ------------------------------ */
     version = ''
     do i = 1 to in.0
       if version = '' then
@@ -2506,9 +2605,40 @@ REXXCSI:
     end
     ic = 0
 
-  /* ------------------------- *
-  | Process each index record |
-  * ------------------------- */
+    /* -------------------------------- *
+    | Update the Version member (zver) |
+    * -------------------------------- */
+    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    zver.0 = 1
+    zver.1 = substr(version,2)
+    'execio * diskw' cbtdd '(finis stem zver.'
+    'free f('cbtdd')'
+    drop zver.
+
+    /* ------------------------------------- *
+    | Find the date for the version release |
+    * ------------------------------------- */
+    ix = i
+    test = '//***SECTION V-'substr(version,2)
+    testl = length(test)
+    do i = 1 to in.0
+      if left(in.i,testl) = test then do
+        i = i + 1
+        vdatem = subword(in.i,7,1)
+        vdated = left(subword(in.i,8,1),2)
+        vdatey = right(subword(in.i,9,1),2)
+        vdatem = wordpos(vdatem,'JAN FEB MAR APR MAY JUN JUL' ,
+          'AUG SEP OCT NOV DEV')
+        version_date = vdatey'/'right(vdatem+100,2)'/'right(vdated+100,2)
+        leave
+      end
+      else iterate
+    end
+    i = ix
+
+    /* ------------------------- *
+    | Process each index record |
+    * ------------------------- */
     Address ISPExec
     ms1 = 'Processing' cbt_file001
     ms2 = 'and creating the' idxmem 'in'
@@ -2519,17 +2649,22 @@ REXXCSI:
     do ix = i to in.0
       if left(in.ix,4) = '//**' then leave
       ic = ic + 1
+      if substr(in.ix,70,1) = '#'
+      then vudate = version_date
+      else vudate = null
       parse value in.ix with . 9 file':' desc 69
       file = strip(file)
       if right(desc,2) = ' *' then
       desc = strip(substr(desc,1,length(desc)-2))
-      idx.ic = left(left(file,4) strip(desc),69) version
+      if vudate = null
+      then idx.ic = left(left(file,4) strip(desc),69) version
+      else idx.ic = left(left(file,4) strip(desc),69) version '#'
     end
     idx.0 = ic -1
 
-  /* ------------------- *
-  | Write out the Index |
-  * ------------------- */
+    /* ------------------- *
+    | Write out the Index |
+    * ------------------- */
     "alloc f("dd") shr reuse ds('"cbt_index"("idxmem")')"
     'execio * diskw' dd '(finis stem idx.'
     'free f('dd')'
@@ -2539,9 +2674,9 @@ REXXCSI:
     ic     = 0
     filec  = 0
 
-  /* ------------------------------------ *
-  | Process each individual File section |
-  * ------------------------------------ */
+    /* ------------------------------------ *
+    | Process each individual File section |
+    * ------------------------------------ */
     Address ISPExec
     ms1 = 'Index creation completed.'
     ms2 = 'Initiating the FILEnnnn Processing.'
@@ -2597,9 +2732,9 @@ REXXCSI:
     Address TSO
     return
 
-  /* ------------------------- *
-  | write out the file member |
-  * ------------------------- */
+    /* ------------------------- *
+    | write out the file member |
+    * ------------------------- */
   Write_itb:
     "alloc f("dd") shr reuse ds('"cbt_index"("file_pfx""file")')"
     'execio * diskw' dd '(finis stem out.'
@@ -2620,7 +2755,7 @@ REXXCSI:
  _ type(input ) hilite(uscore)
  $ type(input ) hilite(uscore) caps(on)
 )Body Expand(\\)
-%CBTTape®!ver %     The!title   %CBT ISPF Application
+%CBTTape®!ver %     The!title   %CBT ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
 +
 +S  File  Description                                                Date
@@ -2651,28 +2786,28 @@ $z+]file @desc                                                  ]z[z@fdate
 )Attr
   ] type(text) intens(low) color(yellow)
 )Body Expand(\\)
-%Tutorial+-\-\%The Official CBT ISPF Application+-\-\%Tutorial
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
 +Command ===>_zcmd
 +
-+Easy access to the contents of the]CBTTAPE+website.
++Easy access to the contents of the]CBTTAPE®+website.
 +
-+This ISPF application provides quick, and easy, access to the contents
-+of the]CBTTAPE+'tape', updates, and overflow, directly from your z/OS
++This ISPF Dialog provides quick, and easy, access to the contents
++of the]CBTTAPE®+'tape', updates, and overflow, directly from your z/OS
 +TSO/ISPF session.
 +
-+If FTP is available, then ALL of the]CBTTAPE+files are available to be
++If FTP is available, then ALL of the]CBTTAPE®+files are available to be
 +downloaded on demand (when you want to check them out). If FTP is not
 +available, then each individual file will need to be downloaded and made
 +available on z/OS for this dialog to work.
 +
-+To delete a downloaded]CBTTAPE+file, use the DSlist command.
++To delete a downloaded]CBTTAPE®+file, use the DSlist command.
 +
 +The following topics are presented in sequence, or may be selected by number:
 +
-+    %1+Primary commands
-+    %2+Individual file commands
-+    %3+Application overview
-+    %4+CBTTape® messages
++    %1+Primary commands                 %4+The Table Explained
++    %2+Individual file commands         %5+CBTTape® Refresh Process
++    %3+Application overview             %6+CBTTape® messages
++
 +
 )Init
  &zup = CBTH
@@ -2683,6 +2818,8 @@ $z+]file @desc                                                  ]z[z@fdate
            2,cbth2
            3,cbth3
            4,cbth4
+           5,cbth5
+           6,cbth6
             *,'?'
             )
 )End
@@ -2690,7 +2827,7 @@ $z+]file @desc                                                  ]z[z@fdate
 )Attr Default(%`_)
   ] type(text) intens(low) color(yellow)
 )Body Expand(\\)
-%Tutorial`-\-\%The Official CBT ISPF Application`-\-\%Tutorial
+%Tutorial`-\-\%The Official CBT ISPF Dialog`-\-\%Tutorial
 `Command ===>_zcmd
 `
 %Notes:`If the CBT file does not exist locally (no%*`on the right) you will
@@ -2700,17 +2837,17 @@ $z+]file @desc                                                  ]z[z@fdate
 `To download a single file, select it using any line command (except I or S).
 `If an update is available for the file then it will be downloaded.
 `
-`The]CBTTape`is a collection of freeware / open-source software for the IBM
+`The]CBTTape®`is a collection of freeware / open-source software for the IBM
 `z/OS operating system.
 `
-`The%Current`(default) display is the active]CBTTAPE`files.
-`The%Overflow`display are the archived (older)]CBTTAPE`files.
+`The%Current`(default) display is the active]CBTTAPE®`files.
+`The%Overflow`display are the archived (older)]CBTTAPE®`files.
 `
-`The]CBTTape`name is derived from the originator of the tape, back when it was
+`The]CBTTape®`name is derived from the originator of the tape, back when it was
 `a 'reel' tape, Arnold Casinghino who worked at Connecticut Bank and Trust
 `Company (CBT).
 `
-`The]CBTTape`website (https://www.cbttape.org) is now maintained by Sam Golob
+`The]CBTTape®`website (https://www.cbttape.org) is now maintained by Sam Golob
 `for the mainframe community.
 )Init
  &zup = CBTH2
@@ -2721,7 +2858,7 @@ $z+]file @desc                                                  ]z[z@fdate
 )Attr
  [ type(output) intens(low) caps(off) color(yellow)
 )Body Expand(\\)
-%Tutorial+-\-\%The Official CBT ISPF Application+-\-\%Tutorial
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
 +Command ===>_zcmd
 +
 +The available commands are:
@@ -2734,6 +2871,8 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %History+ Display a change history for the command         (e.g. H)
 +  %Info+    Display CBT Application Summary Information      (e.g. I)
 +            - View the FILEnnnn member in the Index PDS
++  %LOcal+   Display only local files                         (e.g. LO)
++            - under hlq[cbthlq2
 +  %Locate+  Locates the row with the requested file number   (e.g. L 2)
 +            - leading zero's not required
 +  %New+     Display new files or those waiting for an update (e.g. N)
@@ -2742,34 +2881,34 @@ $z+]file @desc                                                  ]z[z@fdate
 +            - searches in the 1 line description
 +
 +
-+
                   +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH
  &zcont = CBTH1A
+ &cbthlq2 = &cbthlq
 )Proc
 )End
 >Panel CBTH1A
 )Attr
  [ type(output) intens(low) caps(off) color(yellow)
 )Body Expand(\\)
-%Tutorial+-\-\%The Official CBT ISPF Application+-\-\%Tutorial
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
 +Command ===>_zcmd
 +
-+The available commands are:
++More commands are:
 +
-+  %REBuild+ Rebuild the[title   +index member                (e.g. REB)
++  %REBuild+ Rebuild the active index member                  (e.g. REB)
 +            - Suggest only doing this after a new 'Tape' is cut
 +  %Refresh+ Recreates the table for use after ONLY or Search (e.g. R)
 +  %Search+  Display those files that match the string        (e.g. S JCL)
-+  %SIte+    Display only local files                         (e.g. SI)
-+            - under hlq[cbthlq
 +  %SOrt+    Sort File/Date A/D                               (e.g. SO F A)
 +            - abbreviations File (F) and Date (D)
-+  %UPDate+  Check and Download all Updated CBT files         (e.g. UPD)
++  %UPDate+  Check and Download all Updated CBT files since   (e.g. UPD)
++            the last Update
 +            - Any non-blank option to do all dates           (e.g. UPD X)
-+  %CUrrent+ Switch to the Current CBT Files                  (e.g. CU)
-+  %OVerflow+Switch to the Overflow CBT Files                 (e.g. OV)
++            - Also updates the individual FILEnnn members
++  %CUrrent+ Switch to the Current CBT Files   (see Flip)     (e.g. CU)
++  %OVerflow+Switch to the Overflow CBT Files  (see Flip)     (e.g. OV)
 +  %/+       Popup Menu of Commands
 +
 +
@@ -2784,7 +2923,7 @@ $z+]file @desc                                                  ]z[z@fdate
 >Panel CBTH2
 )Attr
 )Body Expand(\\)
-%Tutorial+-\-\%The Official CBT ISPF Application+-\-\%Tutorial
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
 +Command ===>_zcmd
 +
 +The available line commands are:
@@ -2813,117 +2952,181 @@ $z+]file @desc                                                  ]z[z@fdate
 )Proc
 )End
 >Panel CBTH4
+)Attr Default(%[_)
+  ] type(text) intens(low) color(yellow)
+)Body Expand(\\)
+%Tutorial[-\-\%The Official CBT ISPF Dialog[-\-\%Tutorial
+[Command ===>_zcmd
+[
+[The ISPF Table Explained:
+[
+[Columns
+[
+%S[          This is the selection field
+[
+%File[       The]CBTTape®[file number
+[
+%Description[The short description of the files contents
+[
+%Flags[      An%*[indicates the file is online
+[              %+[indicates the file has an available update
+[
+%Date[       Either the version of the 'tape' or the date of the available
+[            update.
+[            - if the date is a version then the%+[flag indicates the file
+[              was updated with the current 'tape' version
+[
+[
+[Press%Enter[to continue with the Tutorial
+)Init
+ &zup = CBTH3
+ &zcont = CBTH5
+)Proc
+)End
+>Panel CBTH5
+)Attr
+  ] type(text) intens(low) color(yellow)
+)Body Expand(\\)
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
++Command ===>_zcmd
++
++Several times each year the]CBTTape®+site is refreshed with a new 'tape'
++version. This involves incorporating all of the update files into the main
++set of files and rebuilding the FILE001.
++
++When this occurs the Official CBT ISPF Dialog needs to have the index
++that it works with refreshed, along with all of the FILEnnnn members in the
++hlq.FILEIDX.PDS.
++
++The process is simple:  1. Update the%U+(update) action on FILE001 to update
++                           your local copy of FILE001.
++                           - if you don't have FTP ability then manually do it
++                        2. Invoke the%REBUILD+command
++                        3. Note that ALL files that were updated with the
++                           refresh will be identified with the update flag,
++                           and the date field will have the CBT version number.
++
++
++
++
++Press%Enter+to continue with the Tutorial
+)Init
+ &zup = CBTH4
+ &zcont = CBTH6
+)Proc
+)End
+>Panel CBTH6
 )Attr Default(%+_)
    ` area(SCRL) Extend(ON)
    ¢ type(text) intens(high) color(yellow)
 )Body expand(\\)
-%Tutorial+-\-\%The Official CBT ISPF Application+-\-\%Tutorial
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
 %Command ===>_zcmd
 +
 ¢CBTTape® Messages+                                               %Up F10 Dn F11
 `sam --------------------------------------------------------------------------`
 )Area Sam
-   %Canceled.     +
-      Rebuild canceled.
-   %Canceled.     +
-      File FTP request canceled.
-   %Canceled.     +
-      CBTTape Update request canceled.
-   %Canceled.     +
-      Copy canceled.
-   %Copied.       +
-      DSN has been copied to NEWDSN.
-   %Error.        +
-      Sort requires a column name (File or Date), with
-      an optional direction (A or D).
-   %Error.        +
-      Find requires a string (e.g. F VSAM).
-   %Error.        +
-      Only requires a string (e.g. O VSAM).
-   %Error.        +
-      Locate requires a file-number (e.g. L 43).
-   %Error.        +
-      The extraction of the unzip utility failed and will
-      prevent downloads until that is fixed. We suspect the
-      problem is that the unzip member of FILEIDX.PDS is
-      either missing or corrupt.
-   %Error.        +
-      Copy From and To may not be the same dataset name.
-   %Fatal.        +
-      CBT FILE/COV001.DATA is not available under cbthlq
-      and was not able to be downloaded via FTP from
-      www.cbttape.org possibly due to a firewall preventing
-      FTP from accessing the site.
-   %Found.        +
-      Found in row:  xxx.
-   %Found.        +
-      File nnn was found in row xxx.
-   %Huh...        +
-      The update count is zero - why are you trying to do an update?
-   %xxx Hits.     +
-      String found in xxx files.
-   %Ignored.      +
-      The OVERFLOW command request has been ignored since
-      you are already in the Overflow files.
-   %Ignored.      +
-      The CURrent command request has been ignored since
-      you are already in the Current CBT files.
-   %Invalid.      +
-      The PDS command is not available.
-   %Invalid.      +
-      The REVIEW command is not available.
-   %Invalid.      +
-      Search requires a search string...
-   %Missing.      +
-      Member xxx does not exist for this file.
-   %No Update.    +
-      Update is disabled for this site.
-   %Not Available.+
-      File xxx is not available and FTP is not enabled.
-   %Not Allowed.  +
-      Update processing is not allowed based on the
-      customization settings for this site.
-   %Not Found.    +
-      Find string not found in any record. Try again.
-   %Not Found.    +
-      File nnn was not found.
-   %Not Found.    +
-      File was not found at www.cbttape.org.
-   %No Updates.   +
-      There have been no updates since the last update.
-   %Rebuild.      +
-      Index has been created/recreated.
-   %Refreshed.    +
-      Refresh completed and all CBT Index entries are
-      now displayed.
-   %Unknown.      +
-      Command is not a registered command. Check the tutorial
-      for the available commands.
-   %Updated.      +
-      xxx files were updated.
-   %Updated.      +
-      xxx datasets were renamed.
-   %Updated.      +
-      The requested file(s) has been updated with a clean
-      copy from the CBTTape website.
-   %Updated.      +
-      The previous dataset was renamed.
-   %Updates.      +
-      xxx updated files are available. Use the
-      Update command to retrieve all updated files, or the
-      U selection to update selected files.
-   %Warning.      +
-      The unzip utility is not available so the download
-      was not performed.
-   %Warning.      +
-      FTP to www.cbttape.org is not working. This may be a
-      problem with your local system or the site may be down.
-      Downloads are being disabled for this session.
-      If this is permanent then change the CBTCONFG to update=0.
-   %Wrapped.      +
-      Find restarted at the top of the table.
++  %Canceled.     +
++     Rebuild canceled.
++  %Canceled.     +
++     File FTP request canceled.
++  %Canceled.     +
++     CBTTape® Update request canceled.
++  %Canceled.     +
++     Copy canceled.
++  %Copied.       +
++     DSN has been copied to NEWDSN.
++  %Error.        +
++     Sort requires a column name (File or Date), with
++     an optional direction (A or D).
++  %Error.        +
++     Find requires a string (e.g. F VSAM).
++  %Error.        +
++     Only requires a string (e.g. O VSAM).
++  %Error.        +
++     Locate requires a file-number (e.g. L 43).
++  %Error.        +
++     The extraction of the unzip utility failed and will
++     prevent downloads until that is fixed. We suspect the
++     problem is that the unzip member of FILEIDX.PDS is
++     either missing or corrupt.
++  %Error.        +
++     Copy From and To may not be the same dataset name.
++  %Fatal.        +
++     CBT FILE/COV001.DATA is not available under cbthlq
++     and was not able to be downloaded via FTP from
++     www.cbttape.org possibly due to a firewall preventing
++     FTP from accessing the site.
++  %Found.        +
++     Found in row:  xxx.
++  %Found.        +
++     File nnn was found in row xxx.
++  %Huh...        +
++     The update count is zero - why are you trying to do an update?
++  %xxx Hits.     +
++     String found in xxx files.
++  %Ignored.      +
++     The OVERFLOW command request has been ignored since
++     you are already in the Overflow files.
++  %Ignored.      +
++     The CURrent command request has been ignored since
++     you are already in the Current CBT files.
++  %Invalid.      +
++     The PDS command is not available.
++  %Invalid.      +
++     The REVIEW command is not available.
++  %Invalid.      +
++     Search requires a search string...
++  %Missing.      +
++     Member xxx does not exist for this file.
++  %No Update.    +
++     Update is disabled for this site.
++  %Not Available.+
++     File xxx is not available and FTP is not enabled.
++  %Not Allowed.  +
++     Update processing is not allowed based on the
++     customization settings for this site.
++  %Not Found.    +
++     Find string not found in any record. Try again.
++  %Not Found.    +
++     File nnn was not found.
++  %Not Found.    +
++     File was not found at www.cbttape.org.
++  %No Updates.   +
++     There have been no updates since the last update.
++  %Rebuild.      +
++     Index has been created/recreated.
++  %Refreshed.    +
++     Refresh completed and all CBT Index entries are
++     now displayed.
++  %Unknown.      +
++     Command is not a registered command. Check the tutorial
++     for the available commands.
++  %Updated.      +
++     xxx files were updated.
++  %Updated.      +
++     xxx datasets were renamed.
++  %Updated.      +
++     The requested file(s) has been updated with a clean
++     copy from the CBTTape® website.
++  %Updated.      +
++     The previous dataset was renamed.
++  %Updates.      +
++     xxx updated files are available. Use the
++     Update command to retrieve all updated files, or the
++     U selection to update selected files.
++  %Warning.      +
++     The unzip utility is not available so the download
++     was not performed.
++  %Warning.      +
++     FTP to www.cbttape.org is not working. This may be a
++     problem with your local system or the site may be down.
++     Downloads are being disabled for this session.
++     If this is permanent then change the CBTCONFG to update=0.
++  %Wrapped.      +
++     Find restarted at the top of the table.
 )Init
- &zup = CBTH3
+ &zup = CBTH5
  &zcont = CBTH
 )Proc
 )End
@@ -2937,7 +3140,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +Change the To dataset name and press%Enter+to perform the
 +copy or%F3+to cancel the copy.
 )Init
- &zwinttl = 'CBTTape Copy Prompt'
+ &zwinttl = 'CBTTape® Copy Prompt'
 )Proc
 &resp = .resp
 &zerrhm   = 'CBTH'
@@ -2977,7 +3180,7 @@ if (&zerrsm EQ &Z)
 +Press%Enter+to use FTP to download this file from cbttape.org
 +or%F3+to cancel the download.
 )Init
- &zwinttl = 'CBTTape FTP File Prompt'
+ &zwinttl = 'CBTTape® FTP File Prompt'
 )Proc
 )End
 >Panel CBTPOPQR
@@ -2985,13 +3188,15 @@ if (&zerrsm EQ &Z)
  $ type(output) caps(off) intens(low)
  ! type(output) caps(off) intens(high)
  @ type(input ) caps(on) hilite(uscore)
-)Body Window(60,4)
-+A Rebuild of the!title   +index has been requested. This
-+should only be performed when FILE001 has been updated.
+)Body Window(65,6)
++A Rebuild of the!title   +index has been requested. This should
++only be performed when FILE001 has been updated, as ALL of the
++FILEnnnn members will be updated from FILE001 which may replace
++any updates that have also updated the FILEnnnn members.
 +
 +Press%Enter+to continue with the rebuild or%F3+to cancel.
 )Init
- &zwinttl = 'CBTTape FTP File Prompt'
+ &zwinttl = 'CBTTape® FTP File Prompt'
 )Proc
 )End
 >Panel CBTPOPQU
@@ -2999,13 +3204,13 @@ if (&zerrsm EQ &Z)
  $ type(output) caps(off) intens(high) just(right)
  @ type(input ) caps(on) hilite(uscore)
 )Body Window(64,4)
-+There are$z  +updates available on the CBTTape Updates site.
++There are$z  +updates available on the CBTTape® Updates site.
 +
 +Press%Enter+to use FTP to download them to your local system
 +or%F3+to cancel the download.
 )Init
 .zvars = '(updates)'
- &zwinttl = 'CBTTape Update Prompt'
+ &zwinttl = 'CBTTape® Update Prompt'
 )Proc
 )End
 >Panel CBTPOP
@@ -3018,18 +3223,19 @@ if (&zerrsm EQ &Z)
   $ms3
 +
 )Init
- &zwinttl = 'CBTTape Popup Message'
+ &zwinttl = 'CBTTape® Popup Message'
 )Proc
 )End
 >Panel CBTINFO
 )Attr
  @ type(output) caps(off) intens(low) color(turq)
  $ type(output) caps(off) intens(low) color(blue)
-)Body Window(60,13)
+)Body Window(60,14)
 +
 $t1      +Dataset:     @cbtidx
 $t2      +Build:       @cbtinfo
-+CBT Dialog Version:   @cbtv
++CBT Dialog Version:   @ver
++CBT Tape Version:     @cbtover
 +Downloaded Files:     @down
 +Available Updates:    @cbtup
 +Default S Action:     @ispfact
@@ -3102,18 +3308,18 @@ $t2      +Build:       @cbtinfo
   + type(text) intens(low) skip(on)
   @ type(output) intens(high) color(turq )
   ] type(output) caps(off) pas(on) intens(high) color(white) hilite(uscore)
-)Body Window(44,13)
+)Body Window(47,12)
 +Enter Command:_z           +
 +
 +Value for Find, Only, Search, and Sort:
 +===> _zopt                        +
 +
- ]ds+       ]info+     ]only+     ]search+
- ]esearch+  ]find+     ]locate+   ]rebuild+
- ]site+     ]flip+     ]new+      ]refresh+
- ]sort+     ]history+  ]overflow+ ]update+
- ]about+    ]current+
-+
+ ]about+     ]flip+      ]new+       ]search+
+ ]current+   ]history+   ]only+      ]sort+
+ ]ds+        ]info+      ]overflow+  ]update+
+ ]esearch+   ]local+     ]rebuild+
+ ]find+      ]locate+    ]refresh+
+
              +Or%F3+to cancel.
 )Init
  &zwinttl = 'CBT Command Options'
@@ -3128,13 +3334,13 @@ $t2      +Build:       @cbtinfo
  &Sort     = 'SOrt   '
  &History  = 'History'
  &Info     = 'Info   '
+ &Local    = 'LOcal  '
  &Locate   = 'Locate '
  &New      = 'New    '
  &Only     = 'Only   '
  &REBuild  = 'REBuild'
  &Refresh  = 'Refresh'
  &Search   = 'Search '
- &SIte     = 'SIte   '
  &UPdate   = 'UPdate '
  &current  = 'CUrrent'
  &overflow = 'OVerflow'
@@ -3147,7 +3353,8 @@ if resp = 'END' then exit
     When left(zcmd,2) = 'FL' then tzcmd = 'FLIP'
     When left(zcmd,1) = 'F'  then tzcmd = 'FIND'
     When left(zcmd,1) = 'S'  then tzcmd = 'SORT'
-    When left(zcmd,1) = 'L'  then tzcmd = 'LOCATE'
+    When zcmd =       = 'L'  then tzcmd = 'LOCATE'
+    When left(zcmd,5) = 'LOCAT'  then tzcmd = 'LOCATE'
     When left(zcmd,2) /= 'OV' then
     if left(zcmd,1) = 'O' then tzcmd = 'ONLY'
     Otherwise tzcmd = ''
@@ -3181,7 +3388,7 @@ if zcmd = ''
  FIELD(REBuild  ) VAR(zcmd) VAL('REBUILD ')
  FIELD(Refresh  ) VAR(zcmd) VAL('REFRESH ')
  FIELD(Search   ) VAR(zcmd) VAL('SEARCH  ')
- FIELD(SIte     ) VAR(zcmd) VAL('SITE    ')
+ FIELD(LOcal    ) VAR(zcmd) VAL('LOCAL   ')
  FIELD(SORT     ) VAR(zcmd) VAL('SORT    ')
  FIELD(UPdate   ) VAR(zcmd) VAL('UPDATE  ')
  FIELD(CURrent  ) VAR(zcmd) VAL('CURRENT ')

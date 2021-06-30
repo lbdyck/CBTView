@@ -20,8 +20,8 @@
  &idxrep = 'U'
 )Proc
  &resp = .resp
-*Rexx(* zerrsm zerrlm resp)
-  parse value '' with zerrsm zerrlm bad
+*Rexx(* zerrsm zerrlm resp exist)
+  parse value '' with zerrsm zerrlm bad exist
   if resp = 'END' then exit
   zerrhm   = ''
   zerralrm = 'NO'
@@ -32,11 +32,15 @@
   then if right(fileidx,12) /= ".FILEIDX.PDS" then bad = 1
   if bad = 1 then
     zerrlm = 'The dataset name must end with .FILEIDX.PDS'
+  if sysdsn(fileidx) /= 'OK'
+     then exist = 0
+     else exist = 1
 *Endrexx
 if (&zerrlm NE &Z)
    .cursor = FILEIDX
    .msg = ISRZ003
 if (&zerrlm EQ &Z)
  ver (&fileidx,nb,dsname)
- ver (&idxact,nb,list,R,U)
+ if (&exist = 1)
+    ver (&idxact,nb,list,R,U)
 )End
