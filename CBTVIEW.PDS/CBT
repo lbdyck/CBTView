@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.48'
+  ver = '1.49'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,7 +29,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2021-06-30 LBD 1.48                                  |
+  |      2021-07-08 LBD 1.49                                  |
+  |                     If no FTP correct invalid dsn bug     |
+  |      2021-06-29 LBD 1.48                                  |
   |                     Flag files as new if updated in the   |
   |                     CBT Release                           |
   |                     Check CBT Release Version file        |
@@ -620,7 +622,7 @@ Do_Select:
   if pos(csel,'BCERVUP') > 0 then do
     zerrsm = null
     dsn = get_file()
-    if ftp_ok = 0 then do
+    if dsn = 0 | ftp_ok = 0 then do
       zerrsm = 'Not Available.'
       zerrlm = 'File' file 'is not available and FTP is not enabled.'
       'setmsg msg(isrz003)'
