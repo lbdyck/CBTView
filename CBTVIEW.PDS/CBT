@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.49'
+  ver = '1.50'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-07-09 LBD 1.50                                  |
+  |                     Comments and clean up                 |
+  |                     Correct invalid dsn bug #2            |
   |      2021-07-08 LBD 1.49                                  |
   |                     If no FTP correct invalid dsn bug     |
   |      2021-06-29 LBD 1.48                                  |
@@ -343,6 +346,7 @@ Do_Index:
 
   if update = 1 then
   if ftp_ok = null then call check_ftp
+  if ftp_ok = null then ftp_ok = 0
 
   Address TSO
   cbtdd = 'CBT'time('s')
@@ -622,14 +626,17 @@ Do_Select:
   if pos(csel,'BCERVUP') > 0 then do
     zerrsm = null
     dsn = get_file()
-    if dsn = 0 | ftp_ok = 0 then do
+    if dsn = 0 & ftp_ok = 0 then do
       zerrsm = 'Not Available.'
       zerrlm = 'File' file 'is not available and FTP is not enabled.'
       'setmsg msg(isrz003)'
       csel = null
       return 4
     end
-    else call get_dsn
+    else do
+         rc = get_dsn()
+         if rc > 0 then return 4
+         end
   end
   Select
     When csel = 'B' then call BEV 'BROWSE'
@@ -723,6 +730,7 @@ Do_ZCMD:
 
   Select
     When abbrev("ABOUT",word(zcmd,1),1) = 1 then call do_about
+    When abbrev("HIDDEN",word(zcmd,1),3) = 1 then call do_hidden
     When words(zcmd) = 2 & abbrev("CHANGE",word(zcmd,1),1) = 1 then do
       'tbend' cbtdd
       tab_open = 0
@@ -761,6 +769,20 @@ Do_ZCMD:
     end
     When abbrev("HISTORY",word(zcmd,1),1) = 1 then call do_history
     When abbrev("INFO",word(zcmd,1),1) = 1 then call do_info
+    When abbrev("QUIET",word(zcmd,1),5) = 1 then do
+         update = 0
+         ftp_ok = 0
+         zerrsm = 'FTP disabled.'
+         zerrlm = zerrsm
+         'setmsg msg(isrz003)'
+         end
+    When abbrev("LIVE",word(zcmd,1),4) = 1 then do
+         update = 1
+         ftp_ok = 1
+         zerrsm = 'FTP enabled.'
+         zerrlm = zerrsm
+         'setmsg msg(isrz003)'
+         end
     When abbrev("LOCATE",word(zcmd,1),1) = 1 then
     call do_locate
     When abbrev('ONLY',translate(word(zcmd,1)),1) = 1 then
@@ -899,6 +921,18 @@ Do_About:
     left('and Willy Jensen - CBTSRCH',73) ,
     left('Copyleft - GNU GPL V3',73) ,
     left('Dedicated to Arnie Casinghino',73)
+  'Setmsg msg(isrz003)'
+  return
+
+  /* ----------------------- *
+  | Display Hidden Commands |
+  * ----------------------- */
+Do_Hidden:
+  zcmd = null
+  zerrsm = null
+  zerrlm = left('Hidden commands:',73) ,
+    left('QUIET - turns off FTP',73) ,
+    left('LIVE  - turns FTP back on',73)
   'Setmsg msg(isrz003)'
   return
 
@@ -1278,7 +1312,7 @@ FTP_DSN:
       zerrsm = 'Canceled.'
       zerrlm = 'File FTP request canceled.'
       address ispexec 'Setmsg msg(isrz003)'
-      return drc
+      return 4
     end
   end
   x = ftp_from_cbt(file)
