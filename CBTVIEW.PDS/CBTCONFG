@@ -15,9 +15,9 @@
 *
 *action = I
 *
-*update = 0 for not allowed
-*         1 for allowed
-*
+*update = 0 for not allowed - meaning FTP is not enabled
+*         1 for allowed     - meaning that FTP will be attempted and used if
+*                             it tests ok
 *update = 0
 *
 *sysout = a sysout class with Copies(0)
