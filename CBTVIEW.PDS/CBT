@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.51'
+  ver = '1.52'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-07-17 LBD 1.52                                  |
+  |                     Add CBT Version to Table Title        |
   |      2021-07-14 LBD 1.51                                  |
   |                     Update Info for FTP STatus and        |
   |                     standardize on ftpstat and update.    |
@@ -2825,6 +2827,7 @@ REXXCSI:
 )Attr
  @ type(output) intens(low) color(green)
  ! type(output) intens(low) color(white) caps(off)
+ { type(output) intens(low) color(white) hilite(uscore)
  ] type(output) intens(low) color(turq )
  [ type(output) intens(high)
  # type(text)               color(turq)
@@ -2832,7 +2835,7 @@ REXXCSI:
  $ type(input ) hilite(uscore) caps(on)
  ~ type(ps)
 )Body Expand(\\)
-%CBTTape®!ver %     The!title   %CBT ISPF Dialog
+%CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
 +
 +S ~File+ Description                                               ~Date+
@@ -2842,6 +2845,9 @@ $z+]file @desc                                                  ]z[z@fdate
  .help = cbth
  .zvars = '(csel fupflg online)'
  &cscr = 'CSR'
+*REXX(* cbtver cver)
+ cver = 'V'cbtver
+*EndRexx
 )Proc
  IF (&ZCMD = &Z)
      if (&ztdsels = 0000)
