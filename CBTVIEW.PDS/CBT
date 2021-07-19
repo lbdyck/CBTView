@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.52'
+  ver = '1.53'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-07-19 LBD 1.53                                  |
+  |                     Correct Overflow processing           |
   |      2021-07-17 LBD 1.52                                  |
   |                     Add CBT Version to Table Title        |
   |      2021-07-14 LBD 1.51                                  |
@@ -376,6 +378,7 @@ Do_Index:
   check_update = 0
 
   "alloc f("cbtdd") shr reuse ds("cbtindex")"
+  drop idx.
   'execio * diskr' cbtdd '(finis stem idx.'
   'free f('cbtdd')'
 
@@ -1367,6 +1370,7 @@ FTP_DSN:
   if wordpos(file,update_files) > 0 then do
     Address TSO
     "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS("idxmem")')"
+    drop idx.
     'execio * diskr' cbtdd '(finis stem idx.'
     do mi = 1 to idx.0
       if file = word(idx.mi,1) then do
@@ -1661,7 +1665,8 @@ Do_Overflow:
     tab_open = 0
   end
   parse value '' with update_files cbt_online
-  drop updates. idx_file.
+  drop updates. idx_file. idx.
+  update_count = 0
   call do_index
   Return 0
 
@@ -1795,12 +1800,19 @@ Do_Update:
       if left(word(g.gi,9),3) /= zip_pfx then iterate
       parse value g.gi with w1 w2 w3 w4 w5 um ud ut file
       um = wordpos(um,'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec')
+      if pos(':',ut) > 0 then do
       cm = left(date('u'),2)
       dy = left(date('o'),2)
       if um > cm
       then dy = dy - 1
       udate = dy'/'right(um+100,2)'/'right(ud+100,2)
       udt = dy''right(um+100,2)''right(ud+100,2)
+      end
+      else do
+           ut = right(ut,2)
+           udate = ut'/'right(um+100,2)'/'right(ud+100,2)
+           udt = ut''right(um+100,2)''right(ud+100,2)
+           end
       if udt < zdate then iterate
       parse value file with (zip_pfx)file'.zip'
       update_files = update_files file udate
@@ -2651,6 +2663,7 @@ REXXCSI:
     /* ---------------- *
     | Read in File 001 |
     * ---------------- */
+    drop in. idx.
     Address TSO
     'alloc f('dd') shr reuse ds('cbt_file001')'
     'execio * diskr' dd '(finis stem in.'
@@ -2673,12 +2686,14 @@ REXXCSI:
     /* -------------------------------- *
     | Update the Version member (zver) |
     * -------------------------------- */
+    if file_pfx /= 'COV' then do
     "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
     zver.0 = 1
     zver.1 = substr(version,2)
     'execio * diskw' cbtdd '(finis stem zver.'
     'free f('cbtdd')'
     drop zver.
+    end
 
     /* ------------------------------------- *
     | Find the date for the version release |
