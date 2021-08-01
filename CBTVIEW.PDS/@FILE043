@@ -18,8 +18,8 @@
 //*       or invoked as the Enhanced Search (ES) within the CBT     *   FILE 043
 //*       dialog.                                                   *   FILE 043
 //*                                                                 *   FILE 043
-//*           email:        willy.h.jensen@outlook.com              *   FILE 349
-//*           website:      http://harders-jensen.com/wjtech        *   FILE 349
+//*           email:        willy.h.jensen@outlook.com              *   FILE 043
+//*           website:      http://harders-jensen.com/wjtech        *   FILE 043
 //*                                                                 *   FILE 043
 //*       CBT Tape FILE001 is required for this application to      *   FILE 043
 //*       run, but if it isn't available, the application will      *   FILE 043
@@ -39,7 +39,7 @@
 //*       $$README    01.63   2021/06/21 06:47    307 CBT           *   FILE 043
 //*       $INSTALL    01.09   2021/06/29 10:54    145 CBT           *   FILE 043
 //*       $INSTALP    01.06   2021/06/26 08:58     46 CBT           *   FILE 043
-//*       CBT         01.52   2021/07/17 09:57   3496 CBT           *   FILE 043
+//*       CBT         01.54   2021/08/01 15:00   3513 CBT           *   FILE 043
 //*       CBTCONFG    01.11   2021/07/12 14:20     49 CBT           *   FILE 043
 //*       CBTDOWN     01.16   2021/06/21 07:09    276 CBT           *   FILE 043
 //*       CBTDOWNJ    01.00   2021/04/10 10:58     12 CBT           *   FILE 043

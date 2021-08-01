@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.53'
+  ver = '1.54'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-08-01 LBD 1.54                                  |
+  |                     Correct duplicate Update on new file  |
   |      2021-07-19 LBD 1.53                                  |
   |                     Correct Overflow processing           |
   |      2021-07-17 LBD 1.52                                  |
@@ -648,7 +650,7 @@ Do_Select:
       csel = null
       return 4
     end
-    else do
+    else if csel /= 'U' then do
       rc = get_dsn()
       if rc > 0 then return 4
     end
