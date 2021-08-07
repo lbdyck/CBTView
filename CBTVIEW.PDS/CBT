@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.54'
+  ver = '1.55'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-08-06 LBD 1.55                                  |
+  |                     Correct version display in title      |
   |      2021-08-01 LBD 1.54                                  |
   |                     Correct duplicate Update on new file  |
   |      2021-07-19 LBD 1.53                                  |
@@ -526,6 +528,9 @@ Do_Index:
   | Display the Index table and process the requests |
   * ------------------------------------------------ */
   'tbsort' cbtdd 'fields(file,n,a)'
+
+  if cbtver = null
+     then cbtver = cbtover
 
   do forever
     cbtrfind = 'PASSTHRU'
