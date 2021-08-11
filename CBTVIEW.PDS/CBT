@@ -1609,7 +1609,7 @@ Write_Command_File:
   if wcf_opt = 'FTP'
   then do
     if file_pfx = 'FILE' then do
-      if fuptype /= '+'
+      if fupflg /= '+'
       then call add_ftp 'cd cbt'
       else call add_ftp 'cd updates'
     end
