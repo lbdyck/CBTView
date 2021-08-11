@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.55'
+  ver = '1.56'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-08-11 LBD 1.56                                  |
+  |                     Add F3 for Point and Shoot exit       |
   |      2021-08-06 LBD 1.55                                  |
   |                     Correct version display in title      |
   |      2021-08-01 LBD 1.54                                  |
@@ -2859,7 +2861,7 @@ REXXCSI:
 )Body Expand(\\)
 %CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
-+
++                             \ \~F3  +
 +S ~File+ Description                                               ~Date+
 )Model
 $z+]file @desc                                                  ]z[z@fdate
@@ -2887,8 +2889,9 @@ $z+]file @desc                                                  ]z[z@fdate
         &csel = &Z
  ver (&csel,list,S,C,B,E,P,R,V,I,U,/)
 )Pnts
-  Field(zps00001) Var(zcmd) Val('SORT FILE A')
-  Field(zps00002) Var(zcmd) Val('SORT DATE D')
+  Field(zps00001) Var(zcmd) Val('EXIT')
+  Field(zps00002) Var(zcmd) Val('SORT FILE A')
+  Field(zps00003) Var(zcmd) Val('SORT DATE D')
 )End
 >Panel CBTH
 )Attr
