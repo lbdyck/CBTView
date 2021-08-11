@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.56'
+  ver = '1.57'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-08-11 LBD 1.57                                  |
+  |                     Fix random download bug               |
   |      2021-08-11 LBD 1.56                                  |
   |                     Add Exit for Point and Shoot exit     |
   |      2021-08-06 LBD 1.55                                  |
@@ -1607,7 +1609,7 @@ Write_Command_File:
   if wcf_opt = 'FTP'
   then do
     if file_pfx = 'FILE' then do
-      if ftptype = null
+      if fuptype /= '+'
       then call add_ftp 'cd cbt'
       else call add_ftp 'cd updates'
     end
