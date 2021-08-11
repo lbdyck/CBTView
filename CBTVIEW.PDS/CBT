@@ -30,7 +30,7 @@
   | History:                                                  |
   |                                                           |
   |      2021-08-11 LBD 1.56                                  |
-  |                     Add F3 for Point and Shoot exit       |
+  |                     Add Exit for Point and Shoot exit     |
   |      2021-08-06 LBD 1.55                                  |
   |                     Correct version display in title      |
   |      2021-08-01 LBD 1.54                                  |
@@ -753,6 +753,7 @@ Do_ZCMD:
   if zopt /= null then zcmd = zcmd zopt
 
   Select
+    When abbrev("EXIT",word(zcmd,1),1) = 1 then call done
     When abbrev("ABOUT",word(zcmd,1),1) = 1 then call do_about
     When abbrev("HIDDEN",word(zcmd,1),3) = 1 then call do_hidden
     When abbrev("SET",left(word(zcmd,1),3),1) = 1 then do
@@ -2861,7 +2862,7 @@ REXXCSI:
 )Body Expand(\\)
 %CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
-+                             \ \~F3  +
++                             \ \~Exit+
 +S ~File+ Description                                               ~Date+
 )Model
 $z+]file @desc                                                  ]z[z@fdate
