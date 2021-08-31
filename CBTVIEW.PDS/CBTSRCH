@@ -64,13 +64,14 @@
                   Rewrite LOAD, slight performance improvement.
   015 2021-05-18  New parm DATA(COV) for accessing overflow data.
   016 2021-06-18  Som data check.
+  017 2021-08-12  Fix crash for search not found.
 
  Created by Willy Jensen
   email: willy@harders-jensen.com
   web:   https://harders-jensen.com
 
 */
- cbtsver='016 2021-06-18'
+ cbtsver='017 2021-08-12'
  Address ispexec "control errors return"
  "delstack"
 
@@ -97,7 +98,7 @@
  Address Ispexec
  "vget (zscrmaxd zscrmaxw) shared"
  parse value 'CBTSEA#L' '\'   with idapanel $dlm ddlist sysindd sysprtdd,
-   wrklibdd rfindpfk rfindpfsfilesupd srchlst pcfindsave hilite
+   wrklibdd rfindpfk rfindpfsfilesupd srchlst pcfindsave hilite hilitel
  parse value 80       zscrmaxd 1       0        'ZCMD',
         with idascrwt idascrdp idatop idacsrp idacsrf idad. .
  parse value xrange('11'x,'18'x) with idaai1 +1 idaai2 +1 idaai3 ,
@@ -216,7 +217,7 @@ trace off
    /* highlight select words */
    idaattr=copies(' ',length(idaarea))
    hia    =translate(idaarea)
-   do hc=1 to words(hilite)
+   if hilitel<>'' then do hc=1 to words(hilite)                          /*017*/
      parse value word(hilite,hc) word(hilitel,hc) with hs hl .
      hp=0
      do forever
