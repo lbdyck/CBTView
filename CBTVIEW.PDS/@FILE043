@@ -34,18 +34,21 @@
 //*       Note: This is another option:                             *   FILE 043
 //*       By downloading the tersed backup files of the disk        *   FILE 043
 //*       CBTA01 from the CBT website www.cbttape.org               *   FILE 043
-//*                                                                 *   FILE 043
 //*       NAME       VER.MOD   LAST MODIFIED     SIZE   ID          *   FILE 043
-//*       $$README    01.63   2021/06/21 06:47    307 CBT           *   FILE 043
-//*       $INSTALL    01.09   2021/06/29 10:54    145 CBT           *   FILE 043
-//*       $INSTALP    01.06   2021/06/26 08:58     46 CBT           *   FILE 043
-//*       CBT         01.55   2021/08/06 11:44   3518 CBT           *   FILE 043
-//*       CBTCONFG    01.11   2021/07/12 14:20     49 CBT           *   FILE 043
-//*       CBTDOWN     01.16   2021/06/21 07:09    276 CBT           *   FILE 043
+//*       $$$#DATE    05.02   2021/04/16 16:42     12 CBT           *   FILE 043
+//*       $$README    01.60   2021/05/10 19:58    301 LBDYCK        *   FILE 043
+//*       $INSTALL    01.33   2021/05/13 06:33    121 LBDYCK        *   FILE 043
+//*       $INSTALP    01.03   2021/05/13 06:23     37 LBDYCK        *   FILE 043
+//*       @FILE043    01.58   2021/08/25 11:55     51 CBT-502       *   FILE 043
+//*       CBT         01.32   2021/05/10 09:15   3090 CBT           *   FILE 043
+//*       CBTCONFG    01.11   2021/05/13 06:27     49 LBDYCK        *   FILE 043
+//*       CBTDOWN     01.13   2021/05/09 06:34    268 CT            *   FILE 043
 //*       CBTDOWNJ    01.00   2021/04/10 10:58     12 CBT           *   FILE 043
-//*       CBTSRCH     01.16   2021/06/18 08:05   1115 CBT           *   FILE 043
+//*       CBTSRCH     01.18   2021/08/12 06:07   1116 CBT           *   FILE 043
 //*       CBTSRCH$    01.02   2021/05/01 05:26     63 CBT           *   FILE 043
-//*       CBTVIEW     01.05   2021/04/06 13:53     25 CBT           *   FILE 043
+//*       CBTVIEW     01.00   2021/05/13 06:27     25 LBDYCK        *   FILE 043
+//*       UNZIP                                                     *   FILE 043
 //*       UNZIPL      01.00   2021/04/07 03:33    761 CBT           *   FILE 043
 //*       UNZIPXMI    01.01   2021/05/10 20:05   3272 CBTXMIT       *   FILE 043
+//*                                                                 *   FILE 043
 //*                                                                 *   FILE 043
