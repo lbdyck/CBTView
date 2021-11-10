@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.57'
+  ver = '1.59'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,10 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-11-07 LBD 1.59                                  |
+  |                     Add skip to selection field           |
+  |      2021-08-25 LBD 1.58                                  |
+  |                     Exit if no FILE001 and FTP disabled   |
   |      2021-08-11 LBD 1.57                                  |
   |                     Fix random download bug               |
   |      2021-08-11 LBD 1.56                                  |
@@ -373,8 +377,18 @@ Do_Index:
   Address TSO
   cbtdd = 'CBT'time('s')
   cbtindex = "'"cbthlq".FILEIDX.PDS("idxmem")'"
-  if sysdsn(cbtindex) /= 'OK'
-  then call build_index
+  if sysdsn(cbtindex) /= 'OK' then do
+      if update = 1
+         then call build_index
+      else do
+           zerrsm = 'Error.'
+           zerrlm = 'Unable to build the CBT Index as FILE001.DATA is' ,
+                    'not available and FTP is not enabled.'
+           Address ISPExec ,
+           'setmsg msg(isrz003)'
+           return
+           end
+      end
 
   /* Get list of local datasets */
   call get_dataset_list
@@ -502,6 +516,7 @@ Do_Index:
   | if not                        |
   | then Check for updated files. |
   * ----------------------------- */
+  if cbtver = null then cbtver = cbtover /* check */
   if update = 1 then
   if cbtover /= cbtver then
   if cbtover /= null then do
@@ -1514,7 +1529,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   then cbtvol = 'volume('volser')'
   else cbtvol = null
   'alloc ds('zos') new spa('space','space') tr dsorg(ps)' ,
-    'recfm(f b) lrecl(80) blksize(32720)' cbtvol
+    'recfm(f b) lrecl(80) blksize(32720)' cbtvol 'release'
   'free ds('zos')'
   from_dir = '/tmp/'archive
   'oget' "'"from_dir"'" zos 'Binary'
@@ -2855,7 +2870,7 @@ REXXCSI:
  @ type(output) intens(low) color(green)
  ! type(output) intens(low) color(white) caps(off)
  { type(output) intens(low) color(white) hilite(uscore)
- ] type(output) intens(low) color(turq )
+ ] type(output) intens(low) color(turq ) skip(on)
  [ type(output) intens(high)
  # type(text)               color(turq)
  _ type(input ) hilite(uscore)
@@ -2905,8 +2920,8 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +Easy access to the contents of the]CBTTAPE®+website.
 +
-+This ISPF Dialog provides quick, and easy, access to the contents
-+of the]CBTTAPE®+'tape', updates, and overflow, directly from your z/OS
++This ISPF Dialog provides quick, and easy, access to the contents of
++the]CBTTAPE®+'tape', updates, and overflow, directly from your z/OS
 +TSO/ISPF session.
 +
 +If FTP is available, then ALL of the]CBTTAPE®+files are available to be
