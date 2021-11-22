@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.59'
+  ver = '1.60'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-11-22 LBD 1.60                                  |
+  |                     Fix Typo in Tutorial                  |
   |      2021-11-07 LBD 1.59                                  |
   |                     Add skip to selection field           |
   |      2021-08-25 LBD 1.58                                  |
@@ -522,7 +524,7 @@ Do_Index:
   if cbtover /= null then do
     zerrsm = 'New CBT Version.'
     zerrlm = 'CBT Version' cbtver 'is now available. You should' ,
-      'download FILE001 and then use the REBUILD command to referesh' ,
+      'download FILE001 and then use the REBUILD command to refresh' ,
       'the CBT Index used by this dialog along with all the FILEnnn' ,
       'members. Your current version is:' cbtover
     'setmsg msg(isrz003)'
