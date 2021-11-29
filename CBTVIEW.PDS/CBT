@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.60'
+  ver = '1.61'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-11-29 LBD 1.61                                  |
+  |                     Report if FILE043 is updated - this   |
+  |                     application.                          |
   |      2021-11-22 LBD 1.60                                  |
   |                     Fix Typo in Tutorial                  |
   |      2021-11-07 LBD 1.59                                  |
@@ -254,7 +257,7 @@
 
   parse value '' with null load_info rfind_opt tab_open ftptype ,
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
-    special cbtver ispfact
+    special cbtver ispfact file043_update
 
   /* ---------------------------------------------------- *
   | CBT Exec Defaults                                    |
@@ -427,6 +430,8 @@ Do_Index:
     else online = '*'
     idx_file.file = 1
     if wordpos(file,update_files) > 0 then do
+      if cbttype = null then
+      if file = '043' then file043_update = 1
       desc = strip(updates.file)
       if left(fdate,1) /= 'V' then do
         w = wordpos(file,update_files)
@@ -519,6 +524,12 @@ Do_Index:
   | then Check for updated files. |
   * ----------------------------- */
   if cbtver = null then cbtver = cbtover /* check */
+  if file043_update = null
+     then file043_msg = null
+     else file043_msg = copies('-',72),
+          'NOTE: The CBT Application has been',
+          'updated in FILE043 and you should get the update to',
+          'remain current.'
   if update = 1 then
   if cbtover /= cbtver then
   if cbtover /= null then do
@@ -526,7 +537,7 @@ Do_Index:
     zerrlm = 'CBT Version' cbtver 'is now available. You should' ,
       'download FILE001 and then use the REBUILD command to refresh' ,
       'the CBT Index used by this dialog along with all the FILEnnn' ,
-      'members. Your current version is:' cbtover
+      'members. Your current version is:' cbtover file043_msg
     'setmsg msg(isrz003)'
   end
   if cbtover = cbtver then
@@ -534,7 +545,7 @@ Do_Index:
     zerrsm = 'Updates.'
     zerrlm = update_count 'updated files are available. Use the' ,
       'Update command to retrieve all updated files, or the U selection to' ,
-      'update selected files.'
+      'update selected files.' file043_msg
     'setmsg msg(isrz003)'
   end
 

@@ -20,6 +20,6 @@
  |     Desc:    Fast access to a individual CBT dataset   |
  * ------------------------------------------------------ */
   arg opt
-  "altlib act app(exec) ds('LBDYCK.CBT.FILEIDX.PDS')"
+  "altlib act app(exec) ds('hlq.CBT.FILEIDX.PDS')"   /* <-- Change */
   '%cbt' opt
   'altlib deact app(exec)'
