@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.61'
+  ver = '1.62'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -29,6 +29,10 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-12-01 LBD 1.62                                  |
+  |                     Correct update file issue of getting  |
+  |                     the original and not update if the    |
+  |                     file already exists.                  |
   |      2021-11-29 LBD 1.61                                  |
   |                     Report if FILE043 is updated - this   |
   |                     application.                          |
@@ -409,6 +413,18 @@ Do_Index:
   'execio * diskr' cbtdd '(finis stem idx.'
   'free f('cbtdd')'
 
+  /* ------------------------------- *
+   | Read in the File043 update date |
+   * ------------------------------- */
+  f43date = "'"cbthlq".FILEIDX.PDS(z43date)'"
+  if sysdsn(f43date) = 'OK' then do
+     'alloc f('cbtdd') shr reuse ds('f43date')'
+     'execio * diskr' cbtdd '(finis stem f43.'
+     'free f('cbtdd')'
+      file043_date = strip(f43.1)
+     end
+  else file043_date = 0
+
   Address ISPExec
   call Enable_Rfind
   'tbcreate' cbtdd 'names(file desc online fupflg fdate vuflag) nowrite'
@@ -430,8 +446,6 @@ Do_Index:
     else online = '*'
     idx_file.file = 1
     if wordpos(file,update_files) > 0 then do
-      if cbttype = null then
-      if file = '043' then file043_update = 1
       desc = strip(updates.file)
       if left(fdate,1) /= 'V' then do
         w = wordpos(file,update_files)
@@ -443,6 +457,8 @@ Do_Index:
           fupflg = '+'
           update_count = update_count + 1
           fdate = word(update_files,w+1)
+          if file = '043' then file043_update = 1
+             else file043_update = null
         end
       end
       else do
@@ -1012,7 +1028,10 @@ Get_DSN:
   x = get_file()
   if x = 0 then do
     if sysvar('SYSISPF') /= 'ACTIVE' then return
-    if wordpos(file,update_files) > 0 then ftptype = 'UPDATE'
+    if wordpos(file,updated_files) > 0 then do
+       ftptype = 'UPDATE'
+       fupflg = '+'
+       end
     x = ftp_dsn()
     ftptype = null
     if x > 0 then return 4
@@ -1442,7 +1461,7 @@ FTP_DSN:
   * ---------------------------------------------------- */
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx fupflg fdate
+    zip_pfx fupflg fdate update_files
   arg file
 
   if update = 0 then return 4
@@ -1745,6 +1764,7 @@ Do_Refresh:
     'tbend' cbtdd
     tab_open = 0
   end
+  file043_update = null
   call do_index
   zerrsm = 'Refreshed'
   zerrlm = 'Refresh completed and all CBT Index entries are' ,
@@ -1857,6 +1877,8 @@ Do_Update:
       parse value file with (zip_pfx)file'.zip'
       update_files = update_files file udate
     end
+
+    updated_files = update_files
 
     toc = userid()'_toc'
     cmd = 'cat /tmp/'toc '&& rm /tmp/'toc
