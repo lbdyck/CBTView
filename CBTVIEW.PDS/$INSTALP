@@ -32,6 +32,8 @@
   then if right(fileidx,12) /= ".FILEIDX.PDS" then bad = 1
   if bad = 1 then
     zerrlm = 'The dataset name must end with .FILEIDX.PDS'
+  if sysdsn(fileidx) /= 'OK' then
+     idxact = 'R'
 *Endrexx
 if (&zerrlm NE &Z)
    .cursor = FILEIDX

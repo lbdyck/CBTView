@@ -24,6 +24,7 @@
   fileidx = fileidx 'FILEIDX.PDS'
   fileidx = translate(fileidx,'.',' ')
 
+  replace  = ''
   zerrhm   = ''
   zerralrm = 'NO'
   zerrtp   = 'Notify'
@@ -42,9 +43,7 @@
   end
   "libdef ispplib"
   if drc > 0 then exit
-  if left(fileidx,1) /= "'" then
-  if sysvar('syspref') /= null
-  then fileidx = sysvar('syspref')'.'fileidx
+
   fileidx  = strip(fileidx,"B","'")
   cbtview  = "'"fileidx"(cbtview)'"
   cbtconfg = "'"fileidx"(cbtconfg)'"
@@ -53,64 +52,47 @@
   ddo = 'CBTI'random(999)
   Address TSO
 
-  /* ---------------------------------------------------------------- *
-  | Test if the FILEIDX exists.                                      |
-  |                                                                  |
-  | If not then set the idxact to R (replace)                        |
-  | If it does exist then test for Replace and delete and reallocate |
-  * ---------------------------------------------------------------- */
   x = listdsi(fileidx)
-  if x > 0 then idxact = 'R' /* force to Replace if does not exist */
+  if x > 0 then call alloc_idx
+  else
   if idxact = 'R' then do
     call outtrap 'x.'
     'delete' fileidx
     call outtrap 'off'
-    'alloc f('ddo') new spa(150,90) tr recfm(f b) lrecl(80) blksize(32720)' ,
-      'dsntype(library,2) dir(1) dsorg(po) dsn('fileidx')'
-    'free f('ddo')'
+    call alloc_idx
   end
 
-  /* ------------------------------------------------------- *
-  | Copy the members from the install library to the target |
-  | fileidx library.                                        |
-  |                                                         |
-  | if update then only copy the key updated members.       |
-  * ------------------------------------------------------- */
   Address ISPexec
   'lminit dataid(ddi) dataset('dsn')'
   'lminit dataid(ddo) dataset('fileidx')'
-  if idxact = 'U' then do
-    'lmcopy fromid('ddi') todataid('ddo') frommem(CBT) replace'
-    'lmcopy fromid('ddi') todataid('ddo') frommem(CBTDOWN) replace'
-    'lmcopy fromid('ddi') todataid('ddo') frommem(CBTSRCH*) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem(CBT) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem(CBTDOWN) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem(CBTSRCH*) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem($*) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIPL) replace'
+  if replace = 1 then do
+    'lmcopy fromid('ddi') todataid('ddo') frommem(CBTCONFG) replace'
+    'lmcopy fromid('ddi') todataid('ddo') frommem(CBTVIEW) replace'
   end
-  else do
-    'lmcopy fromid('ddi') todataid('ddo') frommem(CBT*) replace'
-    'lmcopy fromid('ddi') todataid('ddo') frommem($$*) replace'
-    'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIPL) replace'
-  end
-
   'lmfree dataid('ddi')'
   'lmfree dataid('ddo')'
 
   if idxact = 'U' then do
     zerrsm = ''
     zerrlm = fileidx 'has been updated with the current version of' ,
-      'the Official CBT ISPF Dialog. You should compare the CBTCONFG' ,
-      'member in this PDS with the distribution in' dsn 'for any' ,
-      'possible configuration updates.'
+      'the Official CBT ISPF Dialog. You *should* check the CBTCONFG' ,
+      'in this PDS and compare it to the one in' fileidx 'for any' ,
+      'updates.'
     'setmsg msg(isrz002)'
-    call done
+    exit 0
   end
 
   Address TSO
   x = PROMPT('ON')
-  call outtrap 'x.'
   'newstack'
-  queue 'ds('fileidx') sysout(0)'
+  queue 'ds('fileidx')'
   'Receive inds('dsnzip')'
   'delstack'
-  call outtrap 'off'
 
   Address ISPexec ,
     'Edit dataset('cbtconfg')'
@@ -127,19 +109,25 @@
   'Execio * diskw' ddo '(finis stem in.'
   'Free f('ddo')'
 
-Done:
   Address ISPExec
   "LMINIT DATAID(ddo) DATASET("fileidx")"
   "LMOPEN DATAID("ddo") OPTION(INPUT)"
-  if idxact /= 'U' then do
-    'LMMSTATS DATAID('ddo') MEMBER(CBTVIEW)'
-    zerrsm = ''
-    zerrlm = fileidx 'has been allocated and the Official CBT' ,
-      'ISPF Dialog has been copied into it. The CBTVIEW member has' ,
-      'been updated and is ready to place into your SYSEXEC or SYSPROC' ,
-      'set of libraries.'
-    'setmsg msg(isrz002)'
-  end
+  'LMMSTATS DATAID('ddo') MEMBER(CBTVIEW)'
+  zerrsm = ''
+  zerrlm = fileidx 'has been allocated and the Official CBT' ,
+    'ISPF Dialog has been copied into it. The CBTVIEW member has' ,
+    'been updated and is ready to place into your SYSEXEC or SYSPROC' ,
+    'set of libraries.'
+  'setmsg msg(isrz002)'
   'Memlist dataid('ddo') Default(E) field(9)'
   "LMClose Dataid("ddo")"
   "LMFree  Dataid("ddo")"
+  Exit 0
+
+Alloc_IDX:
+  'alloc f('ddo') new spa(150,90) tr recfm(f b) lrecl(80) blksize(32720)' ,
+    'dsntype(library,2) dir(1) dsorg(po) dsn('fileidx')'
+  'free f('ddo')'
+  replace = 1
+  idxact = 'R'
+  return

@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.62'
+  ver = '1.63'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -16,6 +16,7 @@
   |                                                           |
   |         option is:                                        |
   |             * if O then process the Overflow datasets     |
+  |             * if N then act as if no FTP to start with    |
   |                                                           |
   |         \ is the separator                                |
   |                                                           |
@@ -29,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2021-12-28 LBD 1.63                                  |
+  |                     New NOCheck (N) startup option        |
+  |                     New Refresh Check (R C) command       |
   |      2021-12-01 LBD 1.62                                  |
   |                     Correct update file issue of getting  |
   |                     the original and not update if the    |
@@ -261,7 +265,7 @@
 
   parse value '' with null load_info rfind_opt tab_open ftptype ,
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
-    special cbtver ispfact file043_update
+    special cbtver ispfact file043_update save_update
 
   /* ---------------------------------------------------- *
   | CBT Exec Defaults                                    |
@@ -295,6 +299,11 @@
   pds     =  1
   review  =  1
   volser  = null
+
+ if abbrev('NOCHECK',option,1) = 1 then do
+    save_update = update
+    update = 0
+    end
 
 ReStart:
   if newhlq = null then do
@@ -576,6 +585,9 @@ Do_Index:
   | Display the Index table and process the requests |
   * ------------------------------------------------ */
   'tbsort' cbtdd 'fields(file,n,a)'
+
+  if abbrev('NOCHECK',option) = 1 then
+     update = save_update
 
   if cbtver = null
      then cbtver = cbtover
@@ -893,8 +905,13 @@ Do_ZCMD:
         call do_refresh 'c'
       end
     end
-    When abbrev('REFRESH',translate(word(zcmd,1)),1) = 1 then
-    call do_refresh
+    When abbrev('REFRESH',translate(word(zcmd,1)),1) = 1 then do
+       if abbrev('NOCHECK',option,1) = 1 then
+          update = 0
+       if abbrev('CHECK',translate(word(zcmd,2)),1) = 1 then
+          update = save_update
+       call do_refresh
+       end
     When abbrev("RFIND",word(zcmd,1),1) = 1 then do
       zcmd = 'F' save_find
       call  do_find
@@ -2968,10 +2985,10 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +The following topics are presented in sequence, or may be selected by number:
 +
-+    %1+Primary commands                 %4+The Table Explained
-+    %2+Individual file commands         %5+CBTTape® Refresh Process
-+    %3+Application overview             %6+CBTTape® messages
-+
++    %1+Primary commands                 %5+Startup Options
++    %2+Individual file commands         %6+CBTTape® Refresh Process
++    %3+Application overview             %7+CBTTape® messages
++    %4+The Table Explained
 +
 )Init
  &zup = CBTH
@@ -2984,6 +3001,7 @@ $z+]file @desc                                                  ]z[z@fdate
            4,cbth4
            5,cbth5
            6,cbth6
+           7,cbth7
             *,'?'
             )
 )End
@@ -3064,6 +3082,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %REBuild+ Rebuild the active index member                  (e.g. REB)
 +            - Suggest only doing this after a new 'Tape' is cut
 +  %Refresh+ Recreates the table for use after ONLY or Search (e.g. R)
++          + Refresh Check (e.g. R C) over-rides startup NOCHECK
 +  %Search+  Display those files that match the string        (e.g. S JCL)
 +  %SET+     Set the default Select Action (BEIPRV)           (e.g. SET B)
 +  %SOrt+    Sort File/Date A/D                               (e.g. SO F A)
@@ -3075,7 +3094,6 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %CUrrent+ Switch to the Current CBT Files   (see Flip)     (e.g. CU)
 +  %OVerflow+Switch to the Overflow CBT Files  (see Flip)     (e.g. OV)
 +  %/+       Popup Menu of Commands
-+
 +
 +
                    +Press%Enter+to continue with the Tutorial
@@ -3150,6 +3168,37 @@ $z+]file @desc                                                  ]z[z@fdate
 >Panel CBTH5
 )Attr
   ] type(text) intens(low) color(yellow)
+)Body Expand(##)
+%Tutorial+-#-#%The Official CBT ISPF Dialog+-#-#%Tutorial
++Command ===>_zcmd
++
++The CBT Command has the following startup options:
++
+      %CBT option \ althlq
++
++Where:    %option+  %O+to process the CBT Overflow Files
++                    %N+to bypass checking for updates at startup
++                       use%Refresh Check+or%R C+to check.
++
++          %althlq+  Is the HLQ for the desired FILEIDX.PDS dataset to use
++                    instead of the default dataset.
++
++
++
++
++
++
++
++
++Press%Enter+to continue with the Tutorial
+)Init
+ &zup = CBTH4
+ &zcont = CBTH6
+)Proc
+)End
+>Panel CBTH6
+)Attr
+  ] type(text) intens(low) color(yellow)
 )Body Expand(\\)
 %Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
 +Command ===>_zcmd
@@ -3176,10 +3225,10 @@ $z+]file @desc                                                  ]z[z@fdate
 +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH4
- &zcont = CBTH6
+ &zcont = CBTH7
 )Proc
 )End
->Panel CBTH6
+>Panel CBTH7
 )Attr Default(%+_)
    ` area(SCRL) Extend(ON)
    ¢ type(text) intens(high) color(yellow)
@@ -3293,7 +3342,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %Wrapped.      +
 +     Find restarted at the top of the table.
 )Init
- &zup = CBTH5
+ &zup = CBTH6
  &zcont = CBTH
 )Proc
 )End
