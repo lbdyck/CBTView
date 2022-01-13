@@ -42,6 +42,10 @@
 *
 *volser = CBT006
 *
+* workunit = xxxxxxxx (unit type for temporary dataset)
+*          leave commented out to allow SMS to position
+*
+*workunit = SYSALLDA
 *
 * backup = 0 Do NOT create backup files when a file is updated
 *        = 1 Create .Dyymmdd backup files when a file is updated

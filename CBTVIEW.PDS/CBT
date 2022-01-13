@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.63'
+  ver = '1.64'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2022-01-13 LBD 1.64                                  |
+  |                     New Work Volume config option used    |
+  |                     as target of oget.                    |
   |      2021-12-28 LBD 1.63                                  |
   |                     New NOCheck (N) startup option        |
   |                     New Refresh Check (R C) command       |
@@ -299,6 +302,7 @@
   pds     =  1
   review  =  1
   volser  = null
+  workunit = null
 
  if abbrev('NOCHECK',option,1) = 1 then do
     save_update = update
@@ -682,6 +686,8 @@ Check_Overrides:
       update = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'VOLSER' then
       volser = word(ovr.i,3)
+      When translate(word(ovr.i,1)) = 'WORKUNIT' then
+      workunit = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'BACKUP' then
       backup = word(ovr.i,3)
       Otherwise nop
@@ -1478,7 +1484,7 @@ FTP_DSN:
   * ---------------------------------------------------- */
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx fupflg fdate update_files
+    zip_pfx fupflg fdate update_files workunit
   arg file
 
   if update = 0 then return 4
@@ -1574,14 +1580,15 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   'delete' zos
   call outtrap 'off'
 
-  if volser /= null
-  then cbtvol = 'volume('volser')'
-  else cbtvol = null
+  if workunit /= null
+  then wrkunit = 'unit('workunit')'
+  else wrkunit = null
   'alloc ds('zos') new spa('space','space') tr dsorg(ps)' ,
-    'recfm(f b) lrecl(80) blksize(32720)' cbtvol 'release'
+    'recfm(f b) lrecl(80) blksize(32720)' wrkunit 'release'
   'free ds('zos')'
   from_dir = '/tmp/'archive
   'oget' "'"from_dir"'" zos 'Binary'
+
   if translate(right(archive,4)) = '.XMI' then do
 
     Address ISPExec
@@ -1606,12 +1613,21 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     x = PROMPT('ON')
     call outtrap 'x.'
     "Receive inds("zos")"
+    r_rc = rc
     'delstack'
+    if r_rc = 0 then
     'delete' zos
     call outtrap 'off'
     x = update_filennn(file)
   end
   else  zospds = strip(zos,'B',"'")
+
+  if r_rc > 0 then do
+    zerrsm = 'Error.'
+    zerrlm = 'The RECEIVE failed and the input file has been retained:' zos
+    Address ISPExec ,
+    'Setmsg msg(isrz003)'
+     end
 
   cmd = 'cd /tmp/ && rm'  archive
   x = do_command(cmd)
