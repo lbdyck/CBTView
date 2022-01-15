@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.64'
+  ver = '1.65'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2022-01-15 LBD 1.65                                  |
+  |                     Correct update count for EMPTY files  |
+  |                     by reducing...                        |
   |      2022-01-13 LBD 1.64                                  |
   |                     New Work Volume config option used    |
   |                     as target of oget.                    |
@@ -460,6 +463,7 @@ Do_Index:
     idx_file.file = 1
     if wordpos(file,update_files) > 0 then do
       desc = strip(updates.file)
+      if desc = 'EMPTY' then iterate
       if left(fdate,1) /= 'V' then do
         w = wordpos(file,update_files)
         cdn = word(update_files,w+1)
