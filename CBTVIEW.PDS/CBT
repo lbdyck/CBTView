@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.67'
+  ver = '1.68'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2022-04-21 LBD 1.68                                  |
+  |                     Support config volser with .data      |
   |      2022-04-20 LBD 1.67                                  |
   |                     Add XMITINFO to FILEIDX.PDS           |
   |                     Get DCB from XMITINFO and adjust      |
@@ -1595,8 +1597,11 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   if workunit /= null
   then wrkunit = 'unit('workunit')'
   else wrkunit = null
+    if volser /= null
+    then cbtvol = 'volume('volser')'
+    else cbtvol = null
   'alloc ds('zos') new spa('space','space') tr dsorg(ps)' ,
-    'recfm(f b) lrecl(80) blksize(27920)' wrkunit 'release'
+    'recfm(f b) lrecl(80) blksize(27920)' wrkunit cbtvol 'release'
   'free ds('zos')'
   from_dir = '/tmp/'archive
   'oget' "'"from_dir"'" zos 'Binary'
