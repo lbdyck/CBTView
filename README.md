@@ -139,6 +139,7 @@ field, there can be two indicators displayed.
 This application will display a selectable table of all CBT files with
 the following options:
 
+```
 Commands:
     DS   (DS)    Display all the CBT datasets online
                  - DS
@@ -184,6 +185,7 @@ File Selections:
      U           Update the file with a fresh download
      V           Browse the file
      /           Display a popup selection menu
+```
 
 In the displayed table an * indicates that the file is available on the
 local system. And a + indicates that there is an update available for
