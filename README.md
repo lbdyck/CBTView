@@ -232,33 +232,33 @@ file work area. The FTP process is:
 This PDS contains the file summary members for every PDS on the CBTTape along
 with the following special members:
 
-$$README   What you are reading.
-$INSTALL   REXX Installation Dialog to allocate the hlq.FILEIDX.PDS
-           and then copy the key members from this PDS to it
-$INSTALP   ISPF Panel used by $INSTALL
-CBT        The CBTTape ISPF Application - try it - you'll like it.
-CBTCONFG   Site customization data for the CBT ISPF Application.
-CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL of the CBT
-           files (File 001 is excluded as it should already be
-           downloaded as it is used to create CBTINDEX).
-CBTDOWNJ   Sample JCL to run CBTDOWN.
-CBTVIEW    Copy this into a CLIST or EXEC library in your normal
-           TSO library allocations and then tailor it to reference
-           this PDS.
-CBTINDEX   A one-line summary of every file on the CBTTape that is used
-           by the CBT exec as an index. This is created by by the CBT exec.
-           This member is a pre-req for the use of CBTDOWN
-UNZIP      The OMVS port of unzip. It is used when you request a CBT File
-           that is not on your system under the same HLQ as this dataset.
-           Note: this member is in PAX format and will be copied and then
-           extracted into /tmp when required.
-UNZIPL     Unzip License
-XMITINFO   Dave Alcock's tool from File 311 that reports information on
-           the contents in a TSO Transmit dataset. Used by CBT to find
-           RECFM and LRECL so that a more optimal BLKSIZE can be used
-           during the RECEIVE process.
-ZDATE      Created and updated with each UPDATE command. Initially does
-           not exist.
+    $$README   What you are reading.
+    $INSTALL   REXX Installation Dialog to allocate the hlq.FILEIDX.PDS
+               and then copy the key members from this PDS to it
+    $INSTALP   ISPF Panel used by $INSTALL
+    CBT        The CBTTape ISPF Application - try it - you'll like it.
+    CBTCONFG   Site customization data for the CBT ISPF Application.
+    CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL of the CBT
+               files (File 001 is excluded as it should already be
+               downloaded as it is used to create CBTINDEX).
+    CBTDOWNJ   Sample JCL to run CBTDOWN.
+    CBTVIEW    Copy this into a CLIST or EXEC library in your normal
+               TSO library allocations and then tailor it to reference
+               this PDS.
+    CBTINDEX   A one-line summary of every file on the CBTTape that is used
+               by the CBT exec as an index. This is created by by the CBT exec.
+               This member is a pre-req for the use of CBTDOWN
+    UNZIP      The OMVS port of unzip. It is used when you request a CBT File
+               that is not on your system under the same HLQ as this dataset.
+               Note: this member is in PAX format and will be copied and then
+               extracted into /tmp when required.
+    UNZIPL     Unzip License
+    XMITINFO   Dave Alcock's tool from File 311 that reports information on
+               the contents in a TSO Transmit dataset. Used by CBT to find
+               RECFM and LRECL so that a more optimal BLKSIZE can be used
+               during the RECEIVE process.
+    ZDATE      Created and updated with each UPDATE command. Initially does
+               not exist.
 
 If the CBTVIEW command is installed in a library in your CLIST or EXEC
 allocation library then you can also add it to the ISPF command table
