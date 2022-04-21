@@ -3,7 +3,7 @@ The Official CBT ISPF Dialog - Quick and Easy Access to the CBTTape from ISPF
 
 Congratulations - you have found CBTTape File043 - THE place to start.
 
-## OVERVIEW 
+## OVERVIEW
 
 This is an ISPF application that provides quick, and easy, access to the
 contents of the CBTTAPE 'tape', updates, and overflow, directly from your
@@ -227,7 +227,7 @@ file work area. The FTP process is:
       is corrupt - which can happen if the PDS was not transferred
       properly to allow the UNZIP to transfer in mode b and type e.
 
-- - - - - - - - - - - - - - - - - - 
+- - - - - - - - - - - - - - - - - -
 
 This PDS contains the file summary members for every PDS on the CBTTape along
 with the following special members:
@@ -253,6 +253,10 @@ UNZIP      The OMVS port of unzip. It is used when you request a CBT File
            Note: this member is in PAX format and will be copied and then
            extracted into /tmp when required.
 UNZIPL     Unzip License
+XMITINFO   Dave Alcock's tool from File 311 that reports information on
+           the contents in a TSO Transmit dataset. Used by CBT to find
+           RECFM and LRECL so that a more optimal BLKSIZE can be used
+           during the RECEIVE process.
 ZDATE      Created and updated with each UPDATE command. Initially does
            not exist.
 
