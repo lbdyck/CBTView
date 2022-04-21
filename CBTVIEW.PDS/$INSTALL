@@ -70,6 +70,7 @@
   'lmcopy fromid('ddi') todataid('ddo') frommem(CBTSRCH*) replace'
   'lmcopy fromid('ddi') todataid('ddo') frommem($*) replace'
   'lmcopy fromid('ddi') todataid('ddo') frommem(UNZIPL) replace'
+  'lmcopy fromid('ddi') todataid('ddo') frommem(XMITINFO) replace'
   if replace = 1 then do
     'lmcopy fromid('ddi') todataid('ddo') frommem(CBTCONFG) replace'
     'lmcopy fromid('ddi') todataid('ddo') frommem(CBTVIEW) replace'
