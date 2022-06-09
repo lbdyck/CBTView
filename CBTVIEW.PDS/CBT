@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.68'
+  ver = '1.69'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2022-06/09 LBD 1.69                                  |
+  |                     Add RELEASE to the TSO RECEIVE        |
   |      2022-04-21 LBD 1.68                                  |
   |                     Support config volser with .data      |
   |      2022-04-20 LBD 1.67                                  |
