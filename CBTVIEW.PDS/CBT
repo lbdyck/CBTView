@@ -1633,7 +1633,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     if volser /= null
     then cbtvol = 'volume('volser')'
     else cbtvol = null
-    queue "dsn('"zospds"') sysout("sysout")" cbtvol new_blksize
+    queue "dsn('"zospds"') sysout("sysout")" cbtvol new_blksize 'release'
     queue ""
 
     x = PROMPT('ON')
