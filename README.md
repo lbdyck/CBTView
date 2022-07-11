@@ -62,7 +62,7 @@ When a new version of the CBT Tape is cut, it is as if a completely new
 After that point, a new set of Updates is generated, to prepare for the
 next "tape" version.
 
-##INSTALLATION
+## INSTALLATION
 
 To Install this application copy the PDS into a new dataset with the
 dataset name of hlq.FILEIDX.PDS. Where hlq is the high-level-qualifer
@@ -100,7 +100,7 @@ This application has the following requirements:
    - FTP must be enabled to access the WWW.CBTTAPE.ORG site
      * may require opening your firewall if that is allowed
 
-###Installation Tasks
+### Installation Tasks
 
 Download www.cbttape.org/ftp/cbt/CBT001.zip from the CBTTape web site.
 unzip,  and upload in binary to a z/OS sequential dataset
@@ -134,7 +134,7 @@ field, there can be two indicators displayed.
       summary file, hlq.FILEIDX.PDS(FILEnnnn), will be updated with the
       new @FILEnnn (or @FILnnnn) from the newly downloaded file.
 
-##USAGE
+## USAGE
 
 This application will display a selectable table of all CBT files with
 the following options:
@@ -215,7 +215,7 @@ file work area. The FTP process is:
    7. Remove the files from /tmp except for unzip
 
 
-##NOTES
+## NOTES
 
    1. If updates are enabled (update = 1 in CBTCONFG) then each time the
       dialog starts it verifies that FTP is available. If it isn't then
