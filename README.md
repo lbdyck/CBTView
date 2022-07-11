@@ -271,7 +271,7 @@ using these values:
     Action:  Select cmd(%cbtview &zparm)
     Desc:    The CBT ISPF Application
 
-====================================================================
+- - - - - - - - - - - - - - - - - -
 
 This ISPF application is dedicated to all those who have, and will,
 contribute to the mainframe community via this site.
