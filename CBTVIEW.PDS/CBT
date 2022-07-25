@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.70'
+  ver = '1.71'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,7 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2022-06-10 LBD 1.70                                  |
+  |      2022-07-25 LBD 1.71                                  |
+  |                     Cleanup Index Creation                |
+  |      2022-06-13 LBD 1.70                                  |
   |                     Add RELEASE to the another RECEIVE    |
   |      2022-06-09 LBD 1.69                                  |
   |                     Add RELEASE to the TSO RECEIVE        |
@@ -2873,6 +2875,7 @@ REXXCSI:
 
     do ix = i to in.0
       if left(in.ix,4) = '//**' then leave
+      if left(in.ix,4) /= '//*+' then iterate
       ic = ic + 1
       if substr(in.ix,70,1) = '#'
       then vudate = version_date
