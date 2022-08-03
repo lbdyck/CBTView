@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.71'
+  ver = '1.72'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2022-08-03 LBD 1.72                                  |
+  |                     Verify Locate is numeric              |
   |      2022-07-25 LBD 1.71                                  |
   |                     Cleanup Index Creation                |
   |      2022-06-13 LBD 1.70                                  |
@@ -1286,6 +1288,12 @@ Do_Local:
 Do_Locate:
   file = translate(word(zcmd,2))
   if length(file) = 0 then do
+    zerrsm = 'Error.'
+    zerrlm = 'Locate requires a file-number (e.g. L 43)'
+    'setmsg msg(isrz003)'
+    return
+  end
+  if datatype(file) /= 'NUM' then do
     zerrsm = 'Error.'
     zerrlm = 'Locate requires a file-number (e.g. L 43)'
     'setmsg msg(isrz003)'
