@@ -29,6 +29,7 @@
   | Author:    Lionel B. Dyck                                  |
   |                                                            |
   | History:  (most recent on top)                             |
+  |            2022/08/11 LBD - Ignore EMPTY files             |
   |            2022/07/22 LBD - Fix volser on receive          |
   |                           - fix prompt as well             |
   |            2021/06/21 LBD - Support VOLSER from CBTCONFG   |
@@ -112,6 +113,7 @@
 
   if file = null then
   do cbti = 1 to index.0
+    if word(index.cbti,2) = 'EMPTY' then iterate
     file = word(index.cbti,1)
     if file = '001' then iterate
     erc  = get_files()
