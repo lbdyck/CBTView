@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.72'
+  ver = '1.73'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2022-08-30 LBD 1.73                                  |
+  |                     Fix RFIND to start with ztdtop        |
   |      2022-08-03 LBD 1.72                                  |
   |                     Verify Locate is numeric              |
   |      2022-07-25 LBD 1.71                                  |
@@ -941,6 +943,7 @@ Do_ZCMD:
        end
     When abbrev("RFIND",word(zcmd,1),1) = 1 then do
       zcmd = 'F' save_find
+      save_floc = ztdtop
       call  do_find
     end
     When abbrev('SEARCH',translate(word(zcmd,1)),1) = 1 then
