@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.73'
+  ver = '1.74'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2023-05-25 LBD 1.74                                  |
+  |                     Update SRCHFOR for any case for       |
+  |                     DSlist only.                          |
   |      2022-08-30 LBD 1.73                                  |
   |                     Fix RFIND to start with ztdtop        |
   |      2022-08-03 LBD 1.72                                  |
@@ -1397,9 +1400,33 @@ Do_Search:
   * ----------------------------------------------- */
 Do_DSList:
   Address ISPExec
+  call check_anyc '1'   /* update srchfor default anyc */
   "LMDINIT LISTID(LISTID) LEVEL("cbthlq"."file_pfx"*)"
   "LMDDISP LISTID("ListId") Confirm(Yes)"
   "LMDFREE LISTID("ListId")"
+  call check_anyc '2'   /* restore srchfor default anyc */
+  return
+
+  /* ----------------------------------------------------- *
+   | Change the zus4anyc (SRCHFOR default) to selected (/) |
+   | if it is null with option 1.                          |
+   | On option 2 restore it.                               |
+   * ----------------------------------------------------- */
+Check_AnyC:
+  arg anyc_opt
+  'VGet (ZUS4ANYC) Profile'
+  if anyc_opt = 1 then do
+     save_anyc = zus4anyc
+     if zus4anyc = '/' then return
+     if zus4anyc = null
+     then zus4anyc = '/'
+     'vput (zus4anyc) profile'
+     end
+  if anyc_opt = 2 then do
+     if save_zus4anyc = '/' then return
+     zus4anyc = save_anyc
+     'Vput (ZUS4ANYC) Profile'
+     end
   return
 
   /* ---------------------------------------- *
