@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.74'
+  ver = '1.75'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2023-08-04 LBD 1.75                                  |
+  |                     Fix if update files has invalid       |
+  |                     file name                             |
   |      2023-05-25 LBD 1.74                                  |
   |                     Update SRCHFOR for any case for       |
   |                     DSlist only.                          |
@@ -1998,6 +2001,7 @@ Do_Update:
            end
       if udt < zdate then iterate
       parse value file with (zip_pfx)file'.zip'
+      if datatype(word(file,1)) /= 'NUM' then iterate
       update_files = update_files file udate
     end
 
