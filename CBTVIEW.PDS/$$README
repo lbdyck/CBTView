@@ -60,6 +60,15 @@ After that point, a new set of Updates is generated, to prepare for the
 next "tape" version.
 
 ================================================================================
+ONLINE Forum
+================================================================================
+
+If you'd like to join an online forum to discuss all things CBT use this link
+to join the System Z Enthusiasts Discord server and find the 'cbttape' channel.
+
+          https://discord.gg/hxRhtu8KnW
+
+================================================================================
 INSTALLATION
 ================================================================================
 
@@ -271,10 +280,6 @@ UNZIPXMI   This is a TSO Transmit of the OMVS port of unzip.  The
            member is in PAX format and will be copied and then extracted
            into /tmp when required.
 UNZIPL     Unzip License
-XMITINFO   Dave Alcock's tool from File 311 that reports information on
-           the contents in a TSO Transmit dataset. Used by CBT to find
-           RECFM and LRECL so that a more optimal BLKSIZE can be used
-           during the RECEIVE process.
 ZDATE      Created and updated with each UPDATE command. Initially does
            not exist.
 

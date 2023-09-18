@@ -62,6 +62,13 @@ When a new version of the CBT Tape is cut, it is as if a completely new
 After that point, a new set of Updates is generated, to prepare for the
 next "tape" version.
 
+## ONLINE Forum
+
+If you'd like to join an online forum to discuss all things CBT use this link
+to join the System Z Enthusiasts Discord server and find the 'cbttape' channel.
+
+          https://discord.gg/hxRhtu8KnW
+
 ## INSTALLATION
 
 To Install this application copy the PDS into a new dataset with the
