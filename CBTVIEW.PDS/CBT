@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.75'
+  ver = '1.76'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2023-09-21 LBD 1.76                                  |
+  |                     Add tutorial panel for online forum   |
   |      2023-08-04 LBD 1.75                                  |
   |                     Fix if update files has invalid       |
   |                     file name                             |
@@ -3099,7 +3101,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +    %1+Primary commands                 %5+Startup Options
 +    %2+Individual file commands         %6+CBTTape® Refresh Process
 +    %3+Application overview             %7+CBTTape® messages
-+    %4+The Table Explained
++    %4+The Table Explained              %8+Online Forum
 +
 )Init
  &zup = CBTH
@@ -3113,6 +3115,7 @@ $z+]file @desc                                                  ]z[z@fdate
            5,cbth5
            6,cbth6
            7,cbth7
+           8,cbth8
             *,'?'
             )
 )End
@@ -3335,7 +3338,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +Press%Enter+to continue with the Tutorial
 )Init
- &zup = CBTH4
+ &zup = CBTH5
  &zcont = CBTH7
 )Proc
 )End
@@ -3454,6 +3457,37 @@ $z+]file @desc                                                  ]z[z@fdate
 +     Find restarted at the top of the table.
 )Init
  &zup = CBTH6
+ &zcont = CBTH8
+)Proc
+)End
+>Panel CBTH8
+)Attr
+  ] type(text) intens(low) color(yellow)
+)Body Expand(\\)
+%Tutorial+-\-\%The Official CBT ISPF Dialog+-\-\%Tutorial
++Command ===>_zcmd
++
++An online forum has been created within the%System Z Enthusiasts Discord+
++server for discussions about all things CBT.
++
++
++If you'd like to join an online forum to discuss all things CBT use this
++link to join the System Z Enthusiasts Discord server and find the%cbttape+
++channel.
++
+%         https://discord.gg/hxRhtu8KnW
++
++
++
++
++
++
++
++
++
++Press%Enter+to continue with the Tutorial
+)Init
+ &zup = CBTH7
  &zcont = CBTH
 )Proc
 )End
