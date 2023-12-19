@@ -30,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2023-12-18 MRM 1.77                                  |
+  |                     Add SMS keyword config option for     |
+  |                     RECEIVE files                         |
   |      2023-09-21 LBD 1.76                                  |
   |                     Add tutorial panel for online forum   |
   |      2023-08-04 LBD 1.75                                  |
@@ -333,6 +336,7 @@
   review  =  1
   volser  = null
   workunit = null
+  smsinfo = null
 
  if abbrev('NOCHECK',option,1) = 1 then do
     save_update = update
@@ -721,6 +725,8 @@ Check_Overrides:
       workunit = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'BACKUP' then
       backup = word(ovr.i,3)
+      When translate(word(ovr.i,1)) = 'SMSINFO' then
+      smsinfo = word(ovr.i,3)
       Otherwise nop
     End
   end
@@ -1678,7 +1684,8 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     if volser /= null
     then cbtvol = 'volume('volser')'
     else cbtvol = null
-    queue "dsn('"zospds"') sysout("sysout")" cbtvol new_blksize 'release'
+    queue "dsn('"zospds"') sysout("sysout")" cbtvol smsinfo,
+      new_blksize 'release'
     queue ""
 
     x = PROMPT('ON')

@@ -263,7 +263,7 @@ CBTCONFG   Site customization data for the CBT ISPF Application, and
 CBTDOWN    Exec used by CBTDOWNJ (JCL) to download ALL, or a single file
            of the CBT files (File 001 is excluded as it should already be
            downloaded as it is used to create CBTINDEX).
-           ** Uses the CBTCONFG for SYSOUT and VOLSER overrides
+           ** Uses the CBTCONFG for SYSOUT, VOLSER, and SMS class overrides
 CBTDOWNJ   Sample JCL to run CBTDOWN.
 CBTSRCH    Enhanced Search dialog by Willy Jensen
 CBTSRCH$   Installation and use instructions for CBTSRCH
