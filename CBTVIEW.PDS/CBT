@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.76'
+  ver = '1.77'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -30,6 +30,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2023-12-18 MRM 1.77                                  |
+  |                     Add SMS keyword config option for     |
+  |                     RECEIVE files                         |
   |      2023-09-21 LBD 1.76                                  |
   |                     Add tutorial panel for online forum   |
   |      2023-08-04 LBD 1.75                                  |
@@ -333,6 +336,7 @@
   review  =  1
   volser  = null
   workunit = null
+  smsinfo = null
 
  if abbrev('NOCHECK',option,1) = 1 then do
     save_update = update
@@ -706,21 +710,23 @@ Check_Overrides:
     if left(ovr.i,1) = '*' then iterate
     Select
       When translate(word(ovr.i,1)) = 'ACTION' then
-      action = translate(word(ovr.i,3))
+        action = translate(word(ovr.i,3))
       When translate(word(ovr.i,1)) = 'PDS' then
-      pds    = word(ovr.i,3)
+        pds    = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'REVIEW' then
-      review = word(ovr.i,3)
+        review = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'SYSOUT' then
-      sysout = word(ovr.i,3)
+        sysout = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'UPDATE' then
-      update = word(ovr.i,3)
+        update = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'VOLSER' then
-      volser = word(ovr.i,3)
+        volser = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'WORKUNIT' then
-      workunit = word(ovr.i,3)
+        workunit = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'BACKUP' then
-      backup = word(ovr.i,3)
+        backup = word(ovr.i,3)
+      When translate(word(ovr.i,1)) = 'SMSINFO' then
+        smsinfo = word(ovr.i,3)
       Otherwise nop
     End
   end
@@ -1678,7 +1684,8 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     if volser /= null
     then cbtvol = 'volume('volser')'
     else cbtvol = null
-    queue "dsn('"zospds"') sysout("sysout")" cbtvol new_blksize 'release'
+    queue "dsn('"zospds"') sysout("sysout")" cbtvol smsinfo,
+      new_blksize 'release'
     queue ""
 
     x = PROMPT('ON')

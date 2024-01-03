@@ -23,12 +23,15 @@
   |               hlq.FILEIDX.PDS(CBTINDEX) must exist as      |
   |               it is used for the file access               |
   |                                                            |
-  |               Uses the CBTCONFG for SYSOUT and VOLSER      |
-  |               values for the RECEIVE command.              |
+  |               Uses the CBTCONFG for SYSOUT, VOLSER, and    |
+  |               SMS values for the RECEIVE command.          |
   |                                                            |
   | Author:    Lionel B. Dyck                                  |
   |                                                            |
+  | Contributors: M. Ray Mullins                               |
+  |                                                            |
   | History:  (most recent on top)                             |
+  |            2023/12/18 MRM - Support SMS info from CBTCONFG |
   |            2022/08/11 LBD - Ignore EMPTY files             |
   |            2022/07/22 LBD - Fix volser on receive          |
   |                           - fix prompt as well             |
@@ -70,7 +73,7 @@
   /* --------------- *
   | Define defaults |
   * --------------- */
-  parse value '' with null volser recvol
+  parse value '' with null volser recvol smsinfo
   cbtdd = 'CBT'time('s')
   sysout = 'Z'
 
@@ -194,7 +197,7 @@ Get_Files:
     end
 
     'newstack'
-    queue "dsn('"zospds"') sysout("sysout")" recvol 'release'
+    queue "dsn('"zospds"') sysout("sysout")" recvol smsinfo 'release'
     x = PROMPT('ON')
     call outtrap 'x.'
     "Receive inds("zos")"
@@ -275,9 +278,11 @@ Check_Overrides:
     if left(ovr.i,1) = '*' then iterate
     Select
       When translate(word(ovr.i,1)) = 'SYSOUT' then
-      sysout = word(ovr.i,3)
+        sysout = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'VOLSER' then
-      volser = word(ovr.i,3)
+        volser = word(ovr.i,3)
+      When translate(word(ovr.i,1)) = 'SMSINFO' then
+        smsinfo = word(ovr.i,3)
       Otherwise nop
     End
   end

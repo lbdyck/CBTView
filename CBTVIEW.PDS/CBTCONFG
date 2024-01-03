@@ -42,6 +42,11 @@
 *
 *volser = CBT006
 *
+* smsinfo = SMS class information for the RECEIVE command
+*          leave commented out to allow ACS routines to allocate
+*
+*smsinfo = 'STORCLAS(TSODATA) MGMTCLAS(TSODATA)'
+*
 * workunit = xxxxxxxx (unit type for temporary dataset)
 *          leave commented out to allow SMS to position
 *
