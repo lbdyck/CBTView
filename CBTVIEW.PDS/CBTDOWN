@@ -278,11 +278,11 @@ Check_Overrides:
     if left(ovr.i,1) = '*' then iterate
     Select
       When translate(word(ovr.i,1)) = 'SYSOUT' then
-      sysout = word(ovr.i,3)
+        sysout = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'VOLSER' then
-      volser = word(ovr.i,3)
+        volser = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'SMSINFO' then
-      smsinfo = word(ovr.i,3)
+        smsinfo = word(ovr.i,3)
       Otherwise nop
     End
   end

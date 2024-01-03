@@ -1,9 +1,13 @@
 )attr
  _ type(input ) hilite(uscore) caps(on)
-)Body Window(67,13)
+)Body Window(67,17)
 +Enter/Verify the FILEIDX.PDS dataset name:
 +
 +FILEIDX.PDS dataset name:_fileidx                                +
++
++Optional SMS or VOLSER info:
+_SMSINFO                                                          +
++  (Note - the above is not checked for ALLOCATE command syntax)
 +
 +Action if hlq.FILEIDX.PDS exists:_z+  %R+Replace or %U+Update
 +

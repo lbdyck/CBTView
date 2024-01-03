@@ -25,6 +25,7 @@
   fileidx = translate(fileidx,'.',' ')
 
   replace  = ''
+  smsinfo  = ''
   zerrhm   = ''
   zerralrm = 'NO'
   zerrtp   = 'Notify'
@@ -127,7 +128,7 @@
 
 Alloc_IDX:
   'alloc f('ddo') new spa(150,90) tr recfm(f b) lrecl(80) blksize(32720)' ,
-    'dsntype(library,2) dir(1) dsorg(po) dsn('fileidx')'
+    'dsntype(library,2) dir(1) dsorg(po) dsn('fileidx')' smsinfo
   'free f('ddo')'
   replace = 1
   idxact = 'R'

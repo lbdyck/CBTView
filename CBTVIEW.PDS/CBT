@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.76'
+  ver = '1.77'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -710,23 +710,23 @@ Check_Overrides:
     if left(ovr.i,1) = '*' then iterate
     Select
       When translate(word(ovr.i,1)) = 'ACTION' then
-      action = translate(word(ovr.i,3))
+        action = translate(word(ovr.i,3))
       When translate(word(ovr.i,1)) = 'PDS' then
-      pds    = word(ovr.i,3)
+        pds    = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'REVIEW' then
-      review = word(ovr.i,3)
+        review = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'SYSOUT' then
-      sysout = word(ovr.i,3)
+        sysout = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'UPDATE' then
-      update = word(ovr.i,3)
+        update = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'VOLSER' then
-      volser = word(ovr.i,3)
+        volser = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'WORKUNIT' then
-      workunit = word(ovr.i,3)
+        workunit = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'BACKUP' then
-      backup = word(ovr.i,3)
+        backup = word(ovr.i,3)
       When translate(word(ovr.i,1)) = 'SMSINFO' then
-      smsinfo = word(ovr.i,3)
+        smsinfo = word(ovr.i,3)
       Otherwise nop
     End
   end
