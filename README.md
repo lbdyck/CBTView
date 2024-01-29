@@ -9,6 +9,9 @@ This is an ISPF application that provides quick, and easy, access to the
 contents of the CBTTAPE 'tape', updates, and overflow, directly from your
 z/OS TSO/ISPF session.
 
+**Bonus**
+[Hidden Treasures in zOS (aka Bit Bucket x3E)_Official CBT ISPF Dialog.pdf](https://github.com/lbdyck/CBTView/files/14083769/Hidden.Treasures.in.zOS.aka.Bit.Bucket.x3E._Official.CBT.ISPF.Dialog.pdf)
+
 This application requires that FILE001 be available. If it isn't, and FTP
 is enabled, then it will be downloaded (see Dynamic download below). Then
 the file will be processed to generate an index member (1-line description
