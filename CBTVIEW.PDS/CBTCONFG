@@ -49,6 +49,7 @@
 *
 * workunit = xxxxxxxx (unit type for temporary dataset)
 *          do not use VIO as temp datasets are cataloged during lifetime
+*          leave commented out to allow SMS to position
 *
 *workunit = SYSALLDA
 *

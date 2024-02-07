@@ -29,7 +29,6 @@
   | Author:    Lionel B. Dyck                                  |
   |                                                            |
   | Contributors: M. Ray Mullins                               |
-  |                                                            |
   | History:  (most recent on top)                             |
   |            2023/12/18 MRM - Support SMS info from CBTCONFG |
   |            2022/08/11 LBD - Ignore EMPTY files             |
