@@ -48,7 +48,7 @@
 *smsinfo = 'STORCLAS(TSODATA) MGMTCLAS(TSODATA)'
 *
 * workunit = xxxxxxxx (unit type for temporary dataset)
-*          leave commented out to allow SMS to position
+*          do not use VIO as temp datasets are cataloged during lifetime
 *
 *workunit = SYSALLDA
 *
