@@ -332,16 +332,12 @@
   backup  = '1'
   sysout  = 'Z'
   update  =  1
+  save_update = 1
   pds     =  1
   review  =  1
   volser  = null
   workunit = null
   smsinfo = null
-
- if abbrev('NOCHECK',option,1) = 1 then do
-    save_update = update
-    update = 0
-    end
 
 ReStart:
   if newhlq = null then do
@@ -372,12 +368,15 @@ ReStart:
   | Now process any site customization overrides |
   * -------------------------------------------- */
   call Check_Overrides
+  save_update = update
+  if abbrev('NOCHECK',option,1) = 1 then
+     update = 0
 
   Address ISPExec
 
   'vget (ispfact) profile'
   if ispfact = null then
-  ispfact = action
+    ispfact = action
 
   if option = 'O' then do
     file_pfx = 'COV'
@@ -438,7 +437,7 @@ Do_Index:
          then call build_index
       else do
            zerrsm = 'Error.'
-           zerrlm = 'Unable to build the CBT Index as FILE001.DATA is' ,
+           zerrlm = 'Unable to build the CBT Index as' idxllqs 'is' ,
                     'not available and FTP is not enabled.'
            Address ISPExec ,
            'setmsg msg(isrz003)'
@@ -1861,6 +1860,7 @@ Do_Overflow:
   parse value '' with update_files cbt_online
   drop updates. idx_file. idx.
   update_count = 0
+  update = save_update /* reset update to value at entry */
   call do_index
   Return 0
 
@@ -1886,6 +1886,7 @@ Do_CBT:
   end
   parse value '' with update_files cbt_online
   drop updates. idx_file.
+  update = save_update /* reset update to value at entry */
   call do_index
   Return 0
 
@@ -2243,7 +2244,8 @@ Build_Index:
     Address ISPExec 'tbend' cbtdd
     tab_open = 0
   end
-  x = listdsi("'"cbthlq"."file_pfx"001.DATA'")
+  idxllqs = file_pfx"001.DATA"
+  x = listdsi("'"cbthlq"."idxllqs"'")
   if x > 4 then do
     if update = 1 then do
       x = ftp_from_cbt('001')
@@ -2252,7 +2254,7 @@ Build_Index:
     if x > 0 then do
       Address ISPExec
       zerrsm = 'Fatal.'
-      zerrlm = 'CBT' file_pfx'001.DATA is not available under' cbthlq ,
+      zerrlm = 'CBT' idxllqs 'is not available under' cbthlq ,
         'and was not able to be downloaded via FTP from' ,
         'www.cbttape.org possibly due to a firewall preventing' ,
         'FTP from accessing the site.'
