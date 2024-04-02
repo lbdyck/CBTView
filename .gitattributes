@@ -28,5 +28,5 @@
 *.xlsm binary
 *.obj binary
 *.bin binary
-CBTVIEW.PDS/UNZIP git-encoding=BINARY zos-working-tree-encoding=BINARY binary
-CBTVIEW.PDS/UNZIPXMI git-encoding=BINARY zos-working-tree-encoding=BINARY binary
+CBTVIEW.PDS/UNZIP git-encoding=BINARY binary                                 
+CBTVIEW.PDS/UNZIPXMI git-encoding=BINARY binary                                 
