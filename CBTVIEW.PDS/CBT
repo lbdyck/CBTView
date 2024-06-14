@@ -1910,21 +1910,21 @@ Do_Refresh:
   Return
 
   /* ------------------------------------------------------ *
-  | Do UPDATE routine to update for updated files in the   |
-  | www.cbttape.org /pub/updates directory.                |
-  |                                                        |
+  | Do UPDATE routine to update for updated files in the    |
+  | www.cbttape.org /pub/updates directory.                 |
+  |                                                         |
   | FILEIDX.PDS member zDATE is the date of the last update |
-  | process.                                               |
-  |                                                        |
-  | All files newer than the last update date will be:     |
-  |   - downloaded                                         |
-  |   - unzip'd                                            |
-  |   - oget to z/OS                                       |
-  |   - Received                                           |
-  |   - the @FILExxx member processed and added/updated to |
-  |     the FILEIDX.PDS                                    |
-  |   - update the CBTINDEX member with the new file date  |
-  * ------------------------------------------------------ */
+  | process.                                                |
+  |                                                         |
+  | All files newer than the last update date will be:      |
+  |   - downloaded                                          |
+  |   - unzip'd                                             |
+  |   - oget to z/OS                                        |
+  |   - Received                                            |
+  |   - the @FILExxx member processed and added/updated to  |
+  |     the FILEIDX.PDS                                     |
+  |   - update the CBTINDEX member with the new file date   |
+  * ------------------------------------------------------- */
 Do_Update:
   arg update_opt
   renamec = 0
