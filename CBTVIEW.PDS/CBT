@@ -3355,6 +3355,7 @@ $z+]file @desc                                                  ]z[z@fdate
       %CBT option \ althlq
 +
 +Where:    %option+  %O+to process the CBT Overflow Files
++                    %C+to process the CBT Files (default)
 +                    %N+to bypass checking for updates at startup
 +                       use%Refresh Check+or%R C+to check.
 +
