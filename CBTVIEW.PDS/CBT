@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.78'
+  ver = '1.79'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -15,6 +15,8 @@
   | Syntax: %CBT option \ althlq                              |
   |                                                           |
   |         option is:                                        |
+  |             * if C then process the CBT datasets          |
+  |               (default)                                   |
   |             * if O then process the Overflow datasets     |
   |             * if N then act as if no FTP to start with    |
   |                                                           |
@@ -30,6 +32,18 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2024-07-08 MRM 1.79                                  |
+  |                     Fix error in Check_Overrides;         |
+  |                     Add blank line in popups to prevent   |
+  |                     overlay of first line if screen       |
+  |                     identifiers are turned on;            |
+  |                     Variable name cleanup to reduce       |
+  |                     confusion;                            |
+  |                     Stop processing if FILEIDX.PDS does   |
+  |                     not exist (more likely to be hit if   |
+  |                     an override HLQ is specified).        |
+  |                     Add option C to complement O, check   |
+  |                     for valid options.                    |
   |      2024-06-27 LBD 1.78                                  |
   |                     Fix UPdate to UPDate in popup menu    |
   |      2023-12-18 MRM 1.77                                  |
@@ -300,8 +314,16 @@
   |                                                           |
   * --------------------------------------------------------- */
   arg option '\' newhlq
+  if option \= ' ' then
+    if pos(option, 'ONB') = 0 then do
+      zerrsm = null
+      zerrlm = "Invalid option '"option"'"
+      Address ISPExec
+      'setmsg msg(isrz003)'
+      signal done
+    end
 
-  parse value '' with null load_info rfind_opt tab_open ftptype ,
+  parse value '' with null rfind_opt tab_open ftptype ,
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
     special cbtver ispfact file043_update save_update
 
@@ -363,7 +385,7 @@ ReStart:
     zerrlm = "'"cbtidx"'" sysdsn("'"cbtidx"'")
     Address ISPExec
     'setmsg msg(isrz003)'
-    if load_info /= null then call done
+    signal done
   end
 
   /* -------------------------------------------- *
@@ -402,10 +424,11 @@ ReStart:
   /* -------------------------------------- *
   | Get the version of the CBTTape we have |
   * -------------------------------------- */
+  cbtdd = 'CBT'time('s')
   cbtover = null
-  if sysdsn("'"cbthlq".FILEIDX.PDS(ZVER)'") = 'OK' then do
+  if sysdsn("'"cbtidx"(ZVER)'") = 'OK' then do
     Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZVER)')"
     'execio * diskr' cbtdd '(finis stem zver.'
     cbtover = strip(zver.1)
     'free f('cbtdd')'
@@ -432,8 +455,7 @@ Do_Index:
   if update = 1 then ftpstat = 'Enabled'
 
   Address TSO
-  cbtdd = 'CBT'time('s')
-  cbtindex = "'"cbthlq".FILEIDX.PDS("idxmem")'"
+  cbtindex = "'"cbtidx"("idxmem")'"
   if sysdsn(cbtindex) /= 'OK' then do
       if update = 1
          then call build_index
@@ -464,7 +486,7 @@ Do_Index:
   /* ------------------------------- *
    | Read in the File043 update date |
    * ------------------------------- */
-  f43date = "'"cbthlq".FILEIDX.PDS(z43date)'"
+  f43date = "'"cbtidx"(z43date)'"
   if sysdsn(f43date) = 'OK' then do
      'alloc f('cbtdd') shr reuse ds('f43date')'
      'execio * diskr' cbtdd '(finis stem f43.'
@@ -557,7 +579,7 @@ Do_Index:
   end
   if write_index = 1 then do
     Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS("idxmem")')"
+    "alloc f("cbtdd") shr reuse ds('"cbtidx"("idxmem")')"
     'execio * diskw' cbtdd '(finis stem idx.'
     'free f('cbtdd')'
     Address ISPExec
@@ -572,7 +594,7 @@ Do_Index:
       if pos('VERSION #',zver.cbti) = 0 then iterate
       parse value zver.cbti with . 'VERSION #'cbtover .
       cbtover = strip(cbtover)
-      "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+      "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZVER)')"
       drop zver.
       zver.1 = cbtover
       zver.0 = 1
@@ -666,12 +688,13 @@ Do_Index:
   | Done processing so close the table and exit |
   * ------------------------------------------- */
 Done:
+  address ISPEXEC
   if rfind_opt = 1 then
   call Remove_Rfind
   if load_info = null then exit 0
   else x = dropispf(load_info)
   if tab_open = 1 then do
-    'tbend' cbtdd
+    address ISPEXEC 'tbend' cbtdd
     tab_open = 0
   end
   exit 0
@@ -704,33 +727,46 @@ Check_ftp:
   | Process the site customization override member |
   * ---------------------------------------------- */
 Check_Overrides:
-  "Alloc f("cbtdd") shr reuse ds('"cbtidx"(CBTCONFG)')"
-  'Execio * diskr' cbtdd '(finis stem ovr.'
-  'Free  f('cbtdd')'
-  do i = 1 to ovr.0
-    if left(ovr.i,1) = '*' then iterate
-    Select
-      When translate(word(ovr.i,1)) = 'ACTION' then
-        action = translate(word(ovr.i,3))
-      When translate(word(ovr.i,1)) = 'PDS' then
-        pds    = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'REVIEW' then
-        review = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'SYSOUT' then
-        sysout = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'UPDATE' then
-        update = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'VOLSER' then
-        volser = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'WORKUNIT' then
-        workunit = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'BACKUP' then
-        backup = word(ovr.i,3)
-      When translate(word(ovr.i,1)) = 'SMSINFO' then
-        smsinfo = word(ovr.i,3)
-      Otherwise nop
-    End
+  cbtconfg = "'"cbtidx"(CBTCONFG)'"
+  address TSO "Alloc f("cbtdd") shr reuse ds('"cbtidx"(CBTCONFG)')"
+  if sysdsn(cbtconfg) == "OK" then do
+    address TSO 'Execio * diskr' cbtdd '(finis stem ovr.'
+    do i = 1 to ovr.0
+      if left(ovr.i,1) = '*' then iterate
+      Select
+        When translate(word(ovr.i,1)) = 'ACTION' then
+          action = translate(word(ovr.i,3))
+        When translate(word(ovr.i,1)) = 'PDS' then
+          pds    = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'REVIEW' then
+          review = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'SYSOUT' then
+          sysout = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'UPDATE' then
+          update = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'VOLSER' then
+          volser = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'WORKUNIT' then
+          workunit = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'BACKUP' then
+          backup = word(ovr.i,3)
+        When translate(word(ovr.i,1)) = 'SMSINFO' then
+          smsinfo = word(ovr.i,3)
+        Otherwise nop
+      End
+    end
   end
+  else do
+    address TSO 'NEWSTACK'
+    ? = 'action pds review sysout update volser workunit backup smsinfo'
+    do words(?)
+      parse var ? _ ?
+      queue _ '=' value(_)
+    end /* do ? */
+    address TSO 'Execio * diskw' cbtdd '(finis'
+    address TSO 'DELSTACK'
+  end /* else */
+  address TSO 'Free  f('cbtdd')'
   return
 
   /* ---------------------------------- *
@@ -1521,7 +1557,7 @@ FTP_DSN:
   end
   if wordpos(file,update_files) > 0 then do
     Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS("idxmem")')"
+    "alloc f("cbtdd") shr reuse ds('"cbtidx"("idxmem")')"
     drop idx.
     'execio * diskr' cbtdd '(finis stem idx.'
     do mi = 1 to idx.0
@@ -1560,7 +1596,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   if update = 0 then return 4
   if unzip_ok = 0 then return 4
 
-  unzip_dsn = "//'"cbthlq".FILEIDX.PDS(UNZIP)'"
+  unzip_dsn = "//'"cbtidx"(UNZIP)'"
   cbt_hlq   = cbthlq
 
   cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
@@ -1853,6 +1889,7 @@ Do_Overflow:
   file_pfx = 'COV'
   zip_pfx  = 'COV'
   idxmem   = 'COVINDEX'
+  cbtindex = "'"cbtidx"("idxmem")'"
   cbttype  = 'Overflow'
   title    = cbttype
   if tab_open = 1 then do
@@ -1880,6 +1917,7 @@ Do_CBT:
   file_pfx = 'FILE'
   zip_pfx  = 'CBT'
   idxmem   = 'CBTINDEX'
+  cbtindex = "'"cbtidx"("idxmem")'"
   cbttype  = null
   title    = 'Official'
   if tab_open = 1 then do
@@ -1958,15 +1996,15 @@ Do_Update:
   | Check to see if the cbtver is newer than the last      |
   | one.                                                   |
   * ------------------------------------------------------ */
-  if sysdsn("'"cbthlq".FILEIDX.PDS(ZVER)'") = 'OK' then do
+  if sysdsn("'"cbtidx"(ZVER)'") = 'OK' then do
     Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZVER)')"
     'execio * diskr' cbtdd '(finis stem zver.'
     'free f('cbtdd')'
   end
   else do
     Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
+    "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZVER)')"
     zver.0 = 1
     zver.1 = cbtver
     'execio * diskw' cbtdd '(finis stem zver.'
@@ -1978,9 +2016,9 @@ Do_Update:
   | Check to see when the last UPDATE check was performed |
   | and save that date.                                   |
   * ----------------------------------------------------- */
-  if sysdsn("'"cbthlq".FILEIDX.PDS(ZDATE)'") = 'OK' then do
+  if sysdsn("'"cbtidx"(ZDATE)'") = 'OK' then do
     Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZDATE)')"
+    "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZDATE)')"
     'execio * diskr' cbtdd '(finis stem zdate.'
     'free f('cbtdd')'
     Address ISPExec
@@ -2071,7 +2109,7 @@ Do_Update:
   Address TSO
   zdate.1 = date('o')
   zdate.0 = 1
-  "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZDATE)')"
+  "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZDATE)')"
   'execio * diskw' cbtdd '(finis stem zdate.'
   'free f('cbtdd')'
   Address ISPExec
@@ -2108,7 +2146,7 @@ Update_Index:
   env.1='LC_COLLATE=S370'
   call bpxwunix 'sort -k 1 -k 2',ido.,idx.,msg.,env.
   Address TSO
-  "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS("idxmem")')"
+  "alloc f("cbtdd") shr reuse ds('"cbtidx"("idxmem")')"
   'execio * diskw' cbtdd '(finis stem idx.'
   'free f('cbtdd')'
 
@@ -2121,7 +2159,7 @@ Update_Index:
     wh':'wm
 
   ms1 = 'Beginning the update of the CBTINDEX' file_pfx'xxxx members'
-  ms2 = "into '"cbthlq".FILEIDX.PDS'"
+  ms2 = "into '"cbtidx"'"
   ms3 = null
   call do_popup
   Address TSO
@@ -2145,7 +2183,7 @@ Update_Filennn:
   then mem = '@FILE'file
   else mem = '@FIL'file
   input = "'"cbthlq"."file_pfx""file".PDS("mem")'"
-  output = "'"cbthlq".FILEIDX.PDS("file_pfx""file")'"
+  output = "'"cbtidx"("file_pfx""file")'"
   if sysdsn(input) /= 'OK' then return 4
   x = listdsi(input)
   if x > 4 then return 4
@@ -2267,7 +2305,7 @@ Build_Index:
   call bldindex
   Address TSO
   call outtrap 'x.'
-  "Delete '"cbthlq".FILEIDX.PDS(ZDATE)'"
+  "Delete '"cbtidx"(ZDATE)'"
   call outtrap 'off'
   Address ISPExec
   zerrsm = 'Rebuild.'
@@ -2277,9 +2315,9 @@ Build_Index:
   /* ------------------------------------- *
   | If the FILEIDX is a PDS do a Compress |
   * ------------------------------------- */
-  x = listdsi("'"cbthlq".FILEIDX.PDS'" "DIR")
+  x = listdsi("'"cbtidx"'" "DIR")
   if SYSADIRBLK = 'NO_LIM' then return
-  "lminit dataid(lmcomp) dataset('"cbthlq".FILEIDX.PDS') enq(exclu)"
+  "lminit dataid(lmcomp) dataset('"cbtidx"') enq(exclu)"
   'lmcomp dataid('lmcomp')'
   'lmfree dataid('lmcomp')'
   return
@@ -2858,7 +2896,6 @@ REXXCSI:
     * ---------------------------------------------------------- */
 
     cbt_file001 = "'"cbthlq"."file_pfx"001.DATA'"
-    cbt_index   = cbthlq".FILEIDX.PDS"
 
     dd = 'cbt'time('s')
 
@@ -2880,6 +2917,7 @@ REXXCSI:
       if pos('VERSION #',in.i) > 0 then do
         parse value in.i with . 'VERSION #' version '*' .
         version = 'V'strip(version)
+        leave
       end
       if left(in.i,4) = '//*+' then leave
     end
@@ -2889,12 +2927,12 @@ REXXCSI:
     | Update the Version member (zver) |
     * -------------------------------- */
     if file_pfx /= 'COV' then do
-    "alloc f("cbtdd") shr reuse ds('"cbthlq".FILEIDX.PDS(ZVER)')"
-    zver.0 = 1
-    zver.1 = substr(version,2)
-    'execio * diskw' cbtdd '(finis stem zver.'
-    'free f('cbtdd')'
-    drop zver.
+      "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZVER)')"
+      zver.0 = 1
+      zver.1 = substr(version,2)
+      'execio * diskw' cbtdd '(finis stem zver.'
+      'free f('cbtdd')'
+      drop zver.
     end
 
     /* ------------------------------------- *
@@ -2914,9 +2952,7 @@ REXXCSI:
         version_date = vdatey'/'right(vdatem+100,2)'/'right(vdated+100,2)
         leave
       end
-      else iterate
-    end
-    i = ix
+    end i
 
     /* ------------------------- *
     | Process each index record |
@@ -2924,12 +2960,31 @@ REXXCSI:
     Address ISPExec
     ms1 = 'Processing' cbt_file001
     ms2 = 'and creating the' idxmem 'in'
-    ms3 = "'"cbt_index"'"
+    ms3 = "'"cbtidx"'"
     call do_popup
     Address TSO
 
+    /* ----------------------------------- *
+    | Get to the file description section |
+    * ----------------------------------- */
+    test = '//***SECTION FILE DESCRIPTION SECTION'
+    testl = length(test)
+    do i = ix to in.0
+      if left(in.i,testl) = test then do
+        leave
+      end
+    end i
+    if i > in.0 then do
+      zerrlm = 'FILE001 is missing the file description section'
+      'setmsg msg(isrz003)'
+      zerralrm = 'YES'
+      return
+    end /* if i */
+
+    i = i + 1
+
     do ix = i to in.0
-      if left(in.ix,4) = '//**' then leave
+      if left(in.ix,6) = '//*+*+' then leave
       if left(in.ix,4) /= '//*+' then iterate
       ic = ic + 1
       if substr(in.ix,70,1) = '#'
@@ -2948,14 +3003,13 @@ REXXCSI:
     /* ------------------- *
     | Write out the Index |
     * ------------------- */
-    "alloc f("dd") shr reuse ds('"cbt_index"("idxmem")')"
+    "alloc f("dd") shr reuse ds('"cbtidx"("idxmem")')"
     'execio * diskw' dd '(finis stem idx.'
     'free f('dd')'
 
     hit    = 0
     file   = ''
     ic     = 0
-    filec  = 0
 
     /* ------------------------------------ *
     | Process each individual File section |
@@ -2994,14 +3048,14 @@ REXXCSI:
     Address ISPExec
     ms1 = 'Build completed for the CBT Index and FILEnnn members'
     ms2 = 'from' cbt_file001
-    ms3 = 'to' "'"cbt_index"'"
+    ms3 = 'to' "'"cbtidx"'"
     call do_popup
     call update_index_stats
     Address TSO
     return
 
   Update_Index_Stats:
-    "LMINIT DATAID(statidx) DATASET('"cbthlq".FILEIDX.PDS') ENQ(SHR)"
+    "LMINIT DATAID(statidx) DATASET('"cbtidx"') ENQ(SHR)"
     "LMOPEN DATAID("statidx") OPTION(INPUT)"
     'LMMSTATS DATAID('statidx') MEMBER('idxmem')'
     "LMClose Dataid("statidx")"
@@ -3009,7 +3063,7 @@ REXXCSI:
     Return
 
   Get_Index_Stats:
-    "LMINIT DATAID(statid) DATASET('"cbthlq".FILEIDX.PDS')"
+    "LMINIT DATAID(statid) DATASET('"cbtidx"')"
     "LMOPEN DATAID("statid") OPTION(INPUT)"
     "LMMFIND Dataid("statid") MEMBER("idxmem")" ,
       "STATS(YES)"
@@ -3018,7 +3072,6 @@ REXXCSI:
     return
 
   Do_File_Pop:
-    filec = filec + 1
     if file//25 /= 0 then return
     Address ISPExec
     ms1 = null
@@ -3032,7 +3085,7 @@ REXXCSI:
     | write out the file member |
     * ------------------------- */
   Write_itb:
-    "alloc f("dd") shr reuse ds('"cbt_index"("file_pfx""file")')"
+    "alloc f("dd") shr reuse ds('"cbtidx"("file_pfx""file")')"
     'execio * diskw' dd '(finis stem out.'
     'free f('dd')'
     ic = 0
@@ -3302,6 +3355,7 @@ $z+]file @desc                                                  ]z[z@fdate
       %CBT option \ althlq
 +
 +Where:    %option+  %O+to process the CBT Overflow Files
++                    %C+to process the CBT Files (default)
 +                    %N+to bypass checking for updates at startup
 +                       use%Refresh Check+or%R C+to check.
 +
@@ -3506,7 +3560,8 @@ $z+]file @desc                                                  ]z[z@fdate
 )Attr
  $ type(output) caps(on) intens(low)
  @ type(input ) caps(on) hilite(uscore)
-)Body Window(64,4)
+)Body Window(64,5)
++
 +Copy From: $dsn                                            +
 +       To: @newdsn                                         +
 +Change the To dataset name and press%Enter+to perform the
@@ -3546,7 +3601,8 @@ if (&zerrsm EQ &Z)
  $ type(output) caps(off) intens(low)
  [ type(output) intens(high)
  @ type(input ) caps(on) hilite(uscore)
-)Body Window(64,4)
+)Body Window(64,5)
++
 +File[file+has not been downloaded to this system.
 +
 +Press%Enter+to use FTP to download this file from cbttape.org
@@ -3560,7 +3616,8 @@ if (&zerrsm EQ &Z)
  $ type(output) caps(off) intens(low)
  ! type(output) caps(off) intens(high)
  @ type(input ) caps(on) hilite(uscore)
-)Body Window(65,6)
+)Body Window(65,7)
++
 +A Rebuild of the!title   +index has been requested. This should
 +only be performed when FILE001 has been updated, as ALL of the
 +FILEnnnn members will be updated from FILE001 which may replace
@@ -3575,7 +3632,8 @@ if (&zerrsm EQ &Z)
 )Attr
  $ type(output) caps(off) intens(high) just(right)
  @ type(input ) caps(on) hilite(uscore)
-)Body Window(64,4)
+)Body Window(64,5)
++
 +There are$z  +updates available on the CBTTape® Updates site.
 +
 +Press%Enter+to use FTP to download them to your local system
@@ -3638,7 +3696,8 @@ $t2      +Index Refresh:@cbtinfo
   + type(text) intens(low) skip(on)
   @ type(output) intens(high) color(turq )
   ] type(output) caps(off) pas(on) intens(high) color(white) hilite(uscore)
-)Body Window(65,8)
+)Body Window(65,9)
++
 +Enter Selection:_z+
 +
  ]z+Browse the dataset           ]z+Open using the Review Command
@@ -3680,7 +3739,8 @@ $t2      +Index Refresh:@cbtinfo
   + type(text) intens(low) skip(on)
   @ type(output) intens(high) color(turq )
   ] type(output) caps(off) pas(on) intens(high) color(white) hilite(uscore)
-)Body Window(47,12)
+)Body Window(47,13)
++
 +Enter Command:_z           +
 +
 +Value for Find, Only, Search, and Sort:
