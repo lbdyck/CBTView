@@ -32,6 +32,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2024-07-09 LBD 1.79                                  |
+  |                     Fix FTP_From_CBT add expose cbtidx    |
   |      2024-07-08 MRM 1.79                                  |
   |                     Fix error in Check_Overrides;         |
   |                     Add blank line in popups to prevent   |
@@ -1590,7 +1592,7 @@ FTP_DSN:
   * ---------------------------------------------------- */
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx fupflg fdate update_files workunit
+    zip_pfx fupflg fdate update_files workunit cbtidx
   arg file
 
   if update = 0 then return 4
