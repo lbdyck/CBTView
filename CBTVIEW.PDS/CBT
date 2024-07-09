@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.78'
+  ver = '1.79'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -32,7 +32,7 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2024-07-08 MRM 1.78                                  |
+  |      2024-07-08 MRM 1.79                                  |
   |                     Fix error in Check_Overrides;         |
   |                     Add blank line in popups to prevent   |
   |                     overlay of first line if screen       |
@@ -44,6 +44,8 @@
   |                     an override HLQ is specified).        |
   |                     Add option C to complement O, check   |
   |                     for valid options.                    |
+  |      2024-06-27 LBD 1.78                                  |
+  |                     Fix UPdate to UPDate in popup menu    |
   |      2023-12-18 MRM 1.77                                  |
   |                     Add SMS keyword config option for     |
   |                     RECEIVE files                         |
@@ -1947,7 +1949,7 @@ Do_Refresh:
   string = null
   Return
 
-  /* ------------------------------------------------------ *
+  /* ------------------------------------------------------- *
   | Do UPDATE routine to update for updated files in the    |
   | www.cbttape.org /pub/updates directory.                 |
   |                                                         |
@@ -3771,7 +3773,7 @@ $t2      +Index Refresh:@cbtinfo
  &Refresh  = 'Refresh'
  &Search   = 'Search '
  &Set      = 'Set '
- &UPdate   = 'UPdate '
+ &UPdate   = 'UPDate '
  &current  = 'CUrrent'
  &overflow = 'OVerflow'
 )Proc
@@ -3822,7 +3824,7 @@ if zcmd = ''
  FIELD(Search   ) VAR(zcmd) VAL('SEARCH  ')
  FIELD(LOcal    ) VAR(zcmd) VAL('LOCAL   ')
  FIELD(SORT     ) VAR(zcmd) VAL('SORT    ')
- FIELD(UPdate   ) VAR(zcmd) VAL('UPDATE  ')
+ FIELD(UPDate   ) VAR(zcmd) VAL('UPDATE  ')
  FIELD(CURrent  ) VAR(zcmd) VAL('CURRENT ')
  FIELD(OVERFLOW ) VAR(zcmd) VAL('OVERFLOW')
 )End
