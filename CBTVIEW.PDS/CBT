@@ -32,7 +32,7 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2024-12-06 LBD 1.80                                  |
+  |      2024-12-04 LBD 1.80                                  |
   |                   - Changed all unit allocations to 3390  |
   |                     from vio, sysda, sysallda             |
   |                   - If ftp update allowed and if file 001 |
@@ -460,6 +460,8 @@ Do_Index:
   if load_info = null then
   load_info  = loadispf()
 
+  /* From this point forward, you must signal done instead of return */
+
   ms1 = 'The Official CBT ISPF Dialog is initializing.'
   if update = 1
   then ms2 = 'Checking www.cbttape.org for updates.'
@@ -472,16 +474,21 @@ Do_Index:
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
+  idxllqs = file_pfx"001.DATA"
   if sysdsn(cbtindex) /= 'OK' then do
-      if update = 1
-         then call build_index
+      trace ?r
+      if update = 1 then do
+           x = build_index()
+           if x > 0 then
+             signal done
+           end
       else do
            zerrsm = 'Error.'
            zerrlm = 'Unable to build the CBT Index as' idxllqs 'is' ,
                     'not available and FTP is not enabled.'
            Address ISPExec ,
            'setmsg msg(isrz003)'
-           return
+           signal done
            end
       end
 
@@ -494,6 +501,12 @@ Do_Index:
   call do_update
   check_update = 0
 
+  if sysdsn(cbtindex) \= 0 then do
+     zerrsm = 'Error.'
+     zerrlm = 'CBT index in' idxllqs 'is not built, contact CBT support'
+     Address ISPExec 'setmsg msg(isrz003)'
+    signal done
+   end
   "alloc f("cbtdd") shr reuse ds("cbtindex")"
   drop idx.
   'execio * diskr' cbtdd '(finis stem idx.'
@@ -1087,7 +1100,9 @@ Do_ZCMD:
         'setmsg msg(isrz003)'
       end
       else do
-        call  build_index
+        x = build_index()
+        if x > 0 then
+          return
         call do_refresh 'c'
       end
     end
@@ -1725,13 +1740,15 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   cmd = 'cd /tmp && ls -la unzip'
   x = do_command(cmd)
   if pos('not found',e.1) > 0 then do
-    cmd = 'cd /tmp ; cp -B "'unzip_dsn'" unzip.pax; pax -rvf unzip.pax' ,
-      '&& chmod +x unzip ; rm unzip.pax ; ls -laT /tmp/'
+    cmd = 'cd /tmp ; cp -B "'unzip_dsn'" unzip.pax ; pax -rvf unzip.pax' ,
+      '&& chmod +x unzip ; rm unzip.pax ; ls -laT /tmp/unzip'
     x = do_command(cmd)
-    do i = 1 to g.0
-      if right(strip(g.i),5) = 'unzip' then do
-        unzip_ok = 1
-        leave
+    if e.0 = 0 then do
+      do i = 1 to g.0
+        if right(strip(g.i),5) = 'unzip' then do
+          unzip_ok = 1
+          leave
+        end
       end
     end
     if unzip_ok /= 1 then do
@@ -2305,8 +2322,8 @@ Update_Filennn:
   x = listdsi("'"dsn"'")
   Select
     When x > 4 then return 4
-    When sysdsorg = 'PS' | sysrecfm = 'U' then
-         rc = get_cbt_file_info(file)
+    When wordpos(sysdsorg,'PS U') > 0 then
+    rc = get_cbt_file_info(file)
     When sysdsn(input) /= 'OK' then return 4
     Otherwise do
       udd = 'CBT'time('s')
@@ -2404,11 +2421,12 @@ Build_Index:
     Address ISPExec 'tbend' cbtdd
     tab_open = 0
   end
-  idxllqs = file_pfx"001.DATA"
   x = listdsi("'"cbthlq"."idxllqs"'")
   if x > 4 then do
     if update = 1 then do
       x = ftp_from_cbt('001')
+      if x > 0 then
+        return x
     end
     else x = 4
     if x > 0 then do
@@ -2419,7 +2437,7 @@ Build_Index:
         'www.cbttape.org possibly due to a firewall preventing' ,
         'FTP from accessing the site.'
       'Setmsg msg(isrz003)'
-      return
+      return x
     end
   end
   call bldindex
@@ -2432,11 +2450,11 @@ Build_Index:
   | If the FILEIDX is a PDS do a Compress |
   * ------------------------------------- */
   x = listdsi("'"cbtidx"'" "DIR")
-  if SYSADIRBLK = 'NO_LIM' then return
+  if SYSADIRBLK = 'NO_LIM' then return 0
   "lminit dataid(lmcomp) dataset('"cbtidx"') enq(exclu)"
   'lmcomp dataid('lmcomp')'
   'lmfree dataid('lmcomp')'
-  return
+  return 0
 
   /* --------------------  rexx procedure  -------------------- *
   * Name:      LoadISPF                                        *
