@@ -500,7 +500,7 @@ Do_Index:
   call do_update
   check_update = 0
 
-  if sysdsn(cbtindex) \= 0 then do
+  if sysdsn(cbtindex) \= "OK" then do
      zerrsm = 'Error.'
      zerrlm = 'CBT index in' idxllqs 'is not built, contact CBT support'
      Address ISPExec 'setmsg msg(isrz003)'
