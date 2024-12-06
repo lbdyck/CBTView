@@ -32,7 +32,7 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2024-12-04 LBD 1.80                                  |
+  |      2024-12-06 LBD 1.80                                  |
   |                   - Changed all unit allocations to 3390  |
   |                     from vio, sysda, sysallda             |
   |                   - If ftp update allowed and if file 001 |
@@ -2305,8 +2305,8 @@ Update_Filennn:
   x = listdsi("'"dsn"'")
   Select
     When x > 4 then return 4
-    When wordpos(sysdsorg,'PS U') > 0 then
-    rc = get_cbt_file_info(file)
+    When sysdsorg = 'PS' | sysrecfm = 'U' then
+         rc = get_cbt_file_info(file)
     When sysdsn(input) /= 'OK' then return 4
     Otherwise do
       udd = 'CBT'time('s')
