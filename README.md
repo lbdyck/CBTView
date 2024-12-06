@@ -177,8 +177,6 @@ Commands:
                  files since the date of the last update and then
                  download them, update the CBTINDEX and the FILEnnnn
                  members.
-                 - Add any non-blank after the UPDate (e.g. UPD X) to
-                   ignore the date of the last update check.
     CUrrent (CU) Work with the CBT production files *Default
     OVerflow (OV) Work with the CBT Overflow files
     /            - Display a popup menu
