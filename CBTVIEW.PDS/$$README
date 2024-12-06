@@ -280,6 +280,10 @@ UNZIPXMI   This is a TSO Transmit of the OMVS port of unzip.  The
            member is in PAX format and will be copied and then extracted
            into /tmp when required.
 UNZIPL     Unzip License
+XMITINFO   Dave Alcock's tool from File 311 that reports information on
+           the contents in a TSO Transmit dataset. Used by CBT to find
+           RECFM and LRECL so that a more optimal BLKSIZE can be used
+           during the RECEIVE process.
 ZDATE      Created and updated with each UPDATE command. Initially does
            not exist.
 
@@ -313,3 +317,7 @@ contribute to the mainframe community via this site.
 Comments/suggestions/etc. to fix, or improve, this application should be
 directed to Lionel Dyck at lbdyck@gmail.com - complaints welcome as well (but
 please be kind and constructive).
+
+OR
+
+Submit comments/issues/etc. to https://github.com/lbdyck/cbtview
