@@ -33,6 +33,7 @@
   | History:                                                  |
   |                                                           |
   |      2024-12-06 LBD 1.80                                  |
+  |                   - Improve error handling (Ray)          |
   |                   - Changed all unit allocations to 3390  |
   |                     from vio, sysda, sysallda             |
   |                   - If ftp update allowed and if file 001 |
