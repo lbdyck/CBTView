@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.79'
+  ver = '1.80'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -32,6 +32,19 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2024-12-06 LBD 1.80                                  |
+  |                   - Improve error handling (Ray)          |
+  |                   - Changed all unit allocations to 3390  |
+  |                     from vio, sysda, sysallda             |
+  |                   - If ftp update allowed and if file 001 |
+  |                     is updated then get it.               |
+  |                   - Check update file for recfm=PS or U   |
+  |                     then update fileidx(filennnn) from    |
+  |                     FILE001                               |
+  |                   - Fix new version message.              |
+  |                   - Set backup default to 0 (off)         |
+  |                   - Prompt on command update all or       |
+  |                     update only local files               |
   |      2024-07-09 LBD 1.79                                  |
   |                     Fix FTP_From_CBT add expose cbtidx    |
   |      2024-07-08 MRM 1.79                                  |
@@ -315,6 +328,12 @@
   |      2021-04-02 LBD Creation                              |
   |                                                           |
   * --------------------------------------------------------- */
+
+  parse value '' with null rfind_opt tab_open ftptype ,
+    load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
+    special cbtver ispfact file043_update save_update ,
+    rebuild_cbt rebuild_cov update_cbt update_cov download
+
   arg option '\' newhlq
   if option \= ' ' then
     if pos(option, 'ONB') = 0 then do
@@ -324,10 +343,6 @@
       'setmsg msg(isrz003)'
       signal done
     end
-
-  parse value '' with null rfind_opt tab_open ftptype ,
-    load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
-    special cbtver ispfact file043_update save_update
 
   /* ---------------------------------------------------- *
   | CBT Exec Defaults                                    |
@@ -355,7 +370,7 @@
   |        = 1 Create backup files for updated .Dyymmdd  |
   * ---------------------------------------------------- */
   action  = 'I'
-  backup  = '1'
+  backup  = '0'
   sysout  = 'Z'
   update  =  1
   save_update = 1
@@ -446,6 +461,8 @@ Do_Index:
   if load_info = null then
   load_info  = loadispf()
 
+  /* From this point forward, you must signal done instead of return */
+
   ms1 = 'The Official CBT ISPF Dialog is initializing.'
   if update = 1
   then ms2 = 'Checking www.cbttape.org for updates.'
@@ -458,16 +475,20 @@ Do_Index:
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
+  idxllqs = file_pfx"001.DATA"
   if sysdsn(cbtindex) /= 'OK' then do
-      if update = 1
-         then call build_index
+      if update = 1 then do
+           x = build_index()
+           if x > 0 then
+             signal done
+           end
       else do
            zerrsm = 'Error.'
            zerrlm = 'Unable to build the CBT Index as' idxllqs 'is' ,
                     'not available and FTP is not enabled.'
            Address ISPExec ,
            'setmsg msg(isrz003)'
-           return
+           signal done
            end
       end
 
@@ -479,6 +500,13 @@ Do_Index:
   update_files = null
   call do_update
   check_update = 0
+
+  if sysdsn(cbtindex) \= "OK" then do
+     zerrsm = 'Error.'
+     zerrlm = 'CBT index in' idxllqs 'is not built, contact CBT support'
+     Address ISPExec 'setmsg msg(isrz003)'
+    signal done
+   end
 
   "alloc f("cbtdd") shr reuse ds("cbtindex")"
   drop idx.
@@ -499,7 +527,8 @@ Do_Index:
 
   Address ISPExec
   call Enable_Rfind
-  'tbcreate' cbtdd 'names(file desc online fupflg fdate vuflag) nowrite'
+  'tbcreate' cbtdd 'keys(file)' ,
+      'names(desc online fupflg fdate vuflag) nowrite'
   tab_open = 1
   cbtv = null
   drop idx_file.
@@ -535,10 +564,9 @@ Do_Index:
         end
       end
       else do
-        fupflg = '+'
-        update_count =  update_count + 1
         w = wordpos(file,update_files)
         fdate = word(update_files,w+1)
+        if file = 001 then x = check_001_update()
       end
     end
     else if vuflag = '#' & online = null then do
@@ -612,29 +640,37 @@ Do_Index:
   | if not                        |
   | then Check for updated files. |
   * ----------------------------- */
-  if cbtver = null then cbtver = cbtover /* check */
-  if file043_update = null
-     then file043_msg = null
-     else file043_msg = copies('-',72),
-          'NOTE: The CBT Application has been',
-          'updated in FILE043 and you should get the update to',
-          'remain current.'
-  if update = 1 then
-  if cbtover /= cbtver then
-  if cbtover /= null then do
-    zerrsm = 'New CBT Version.'
-    zerrlm = 'CBT Version' cbtver 'is now available. You should' ,
-      'download FILE001 and then use the REBUILD command to refresh' ,
-      'the CBT Index used by this dialog along with all the FILEnnn' ,
-      'members. Your current version is:' cbtover file043_msg
-    'setmsg msg(isrz003)'
+  if download = null then do
+    if cbtver = null then cbtver = cbtover /* check */
+    if file043_update = null
+    then file043_msg = null
+    else file043_msg = copies('-',72),
+      'NOTE: The CBT Application has been',
+      'updated in FILE043 and you should get the update to',
+      'remain current.'
+    if update = 1 then
+    if cbtover /= cbtver then
+    if cbtover /= null then do
+      zerrsm = 'New CBT Version.'
+      zerrlm = 'CBT Version' cbtver 'is now available. You should' ,
+        'download FILE001 and then use the REBUILD command to refresh' ,
+        'the CBT Index used by this dialog along with all the FILEnnn' ,
+        'members. Your current version is:' cbtover file043_msg
+      'setmsg msg(isrz003)'
+    end
+    if cbtover = cbtver then
+    if update_count > 0 then do
+      zerrsm = 'Updates.'
+      zerrlm = update_count 'updated files are available. Use the' ,
+        'Update command to retrieve all updated files, or the U selection to' ,
+        'update selected files.' file043_msg
+      'setmsg msg(isrz003)'
+      download = null
+    end
   end
-  if cbtover = cbtver then
-  if update_count > 0 then do
-    zerrsm = 'Updates.'
-    zerrlm = update_count 'updated files are available. Use the' ,
-      'Update command to retrieve all updated files, or the U selection to' ,
-      'update selected files.' file043_msg
+  else do
+    zerrsm = 'Downloads'
+    zerrlm = words(download) 'Files downloaded.'
     'setmsg msg(isrz003)'
   end
 
@@ -700,6 +736,88 @@ Done:
     tab_open = 0
   end
   exit 0
+
+  /* -------------------------------------------------------------- *
+  | This routine is used to extract the specific FILE info data    |
+  | from FILE001.                                                  |
+  |                                                                |
+  | Note: It can do all FILEs with a parm of FILE *but* that is    |
+  | not used right now due to the need to get the "tape" version   |
+  | number. Thus not used in the bldindex routine that updates ALL |
+  | files info members.                                            |
+  | Bypass if FILE001 has been updated or a REBuild during this    |
+  | session.                                                       |
+  * -------------------------------------------------------------- */
+Get_CBT_File_Info: Procedure expose cbthlq file_pfx inp. null ,
+                   rebuild_cbt rebuild_cov update_cbt update_cov
+  cbt_file001 = cbthlq"."file_pfx"001.DATA"
+  if file_pfx = 'COV'
+     then if rebuild_cov = 1 then return 0
+     else if rebuild_cbt = 1 then return 0
+  arg file
+  address tso
+  "alloc f(newdd) shr reuse ds('"cbt_file001"')"
+  'alloc f(outdd) new spa(15,15) tr recfm(v b) lrecl(121) blksize(0)' ,
+    'unit(3390) reuse'
+  'alloc f(sysin) new spa(5) tr recfm(f b) lrecl(80) blksize(800) reuse'
+  if datatype(file) = 'NUM' then do
+    if file > 1000
+    then file = right(file+10000,4)
+    else file = ' 'right(file+1000,3)
+    c.1 = "SRCHFOR  '"file"'"
+    c.2 = "CMPCOLM  77:80"
+  end
+  else do
+    c.1 = "SRCHFOR  'FILE'"
+    c.2 = "CMPCOLM  73:76"
+  end
+  c.0 = 2
+  'execio * diskw sysin (finis stem c.'
+  address linkmvs 'isrsupc' 'SRCHCMP'
+  'execio * diskr outdd (finis stem cbtin.'
+  'free f(sysin newdd outdd)'
+  ic = 0
+  do i = 1 to cbtin.0
+    Select
+      When left(cbtin.i,1) = '1' then iterate
+      When word(cbtin.i,1) = 'LINES-FOUND' then return 0
+      When strip(cbtin.i) = null then iterate
+      When datatype(word(cbtin.i,1)) /= 'NUM' then iterate
+      otherwise nop
+      end
+      ic = ic + 1
+      inp.ic = subword(cbtin.i,2)
+      inp.0 = ic
+    end
+  return 0
+
+  /* ---------------------------------- *
+   | If FILE 001 is updated then get it |
+   | but only if it is newer            |
+   * ---------------------------------- */
+Check_001_Update:
+  wf = wordpos(file,update_files)
+  ud = word(update_files,wf+1)
+  update_files = delword(update_files,wf,2)
+  cfile = "'"cbthlq"."file_pfx"001.DATA'"
+  x = listdsi(cfile)
+  fd = date('o',substr(syscreate,3,2)''right(syscreate,3),'j')
+  if fd > ud then do
+     fupflg = null
+     return 0
+     end
+   call pfshow 'off'
+   'Addpop row(4) column(3)'
+   'Display Panel(cbtpopf1)'
+   drc = rc
+   'Rempop'
+   call pfshow 'reset'         /* restore pfshow setting */
+  x = ftp_from_cbt(file)
+  if pos('COV',file_pfx) = 0
+     then update_cbt = 1
+     else update_cov = 1
+  fupflg = null
+  return 0
 
   /* ---------------------- *
   | Verify that we can ftp |
@@ -983,7 +1101,9 @@ Do_ZCMD:
         'setmsg msg(isrz003)'
       end
       else do
-        call  build_index
+        x = build_index()
+        if x > 0 then
+          return
         call do_refresh 'c'
       end
     end
@@ -1015,7 +1135,25 @@ Do_ZCMD:
             '- why are you trying to do an update?'
           'setmsg msg(isrz003)'
         end
-        else call do_update word(zcmd,2)
+        else do
+           call pfshow 'off'
+           upopt = null
+           'Addpop row(4) column(3)'
+           'Display Panel(cbtpopup)'
+           drc = rc
+           'Rempop'
+           call pfshow 'reset'         /* restore pfshow setting */
+           if drc > 0 then do
+              zerrsm = 'Cancelled.'
+              zerrlm = 'Update cancelled.'
+              'Setmsg msg(isrz003)'
+              end
+           else do
+              if upopt = 'A' then zcmd = 'U'
+              if upopt = 'U' then zcmd = 'U U'
+              call do_update word(zcmd,2)
+              end
+           end
       end
       if update = 0 then do
         zerrsm = 'Not Allowed.'
@@ -1159,9 +1297,6 @@ Enable_RFind:
   | 6. if the entry is found then add it                    |
   | 7. prime the variable to null                           |
   * ------------------------------------------------------- */
-  /* Comment Start
-  'control errors return'
-  Comment End */
   zctverb = 'RFIND'
   zctact = "&cbtrfind"
   zctdesc = "CBT User controlled Repeat Find (RFIND)"
@@ -1391,7 +1526,7 @@ Do_Search:
   x = outtrap('delete.','*')
   'delete srchfor.'pdstname
   x= outtrap('off')
-  'alloc f(sysin) unit(vio) new reuse space(1,1) tracks',
+  'alloc f(sysin) unit(3390) new reuse space(1,1) tracks',
     'lrecl(80) recfm(f b) blksize(0) dsorg(ps)'
   drop srch.
   sc = 1
@@ -1417,7 +1552,7 @@ Do_Search:
   'execio * diskw sysin (finis stem srch.'
   'delstack'
   "alloc f(newdd) da('"cbtidx"') shr reuse"
-  'alloc f(outdd) da(srchfor.'pdstname') new reuse unit(sysallda)',
+  'alloc f(outdd) da(srchfor.'pdstname') new reuse unit(3390)',
     'space(15,15) tracks recfm(f b a) lrecl(132) blksize(0) dsorg(ps)'
   parm = 'SRCHCMP,ANYC,NOPRTCC,NOSUMS'
   Address ISPExec 'Select pgm(isrsupc) Parm('parm')'
@@ -1592,7 +1727,8 @@ FTP_DSN:
   * ---------------------------------------------------- */
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx fupflg fdate update_files workunit cbtidx
+    zip_pfx fupflg fdate update_files workunit cbtidx smsinfo ,
+    rebuild_cbt rebuild_cov update_cbt update_cov download
   arg file
 
   if update = 0 then return 4
@@ -1606,12 +1742,14 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   x = do_command(cmd)
   if pos('not found',e.1) > 0 then do
     cmd = 'cd /tmp ; cp -B "'unzip_dsn'" unzip.pax; pax -rvf unzip.pax' ,
-      '&& chmod +x unzip ; rm unzip.pax ; ls -laT /tmp/'
+      '&& chmod +x unzip ; rm unzip.pax ; ls -laT /tmp/unzip'
     x = do_command(cmd)
-    do i = 1 to g.0
-      if right(strip(g.i),5) = 'unzip' then do
-        unzip_ok = 1
-        leave
+    if pos('not found',e.1) = 0 then do
+      do i = 1 to g.0
+        if right(strip(g.i),5) = 'unzip' then do
+          unzip_ok = 1
+          leave
+        end
       end
     end
     if unzip_ok /= 1 then do
@@ -1713,7 +1851,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     if x < 5 then
     rc = del_rename(zospds)
 
-    new_blksize = get_new_blksize(zos)
+    parse value get_new_blksize(zos) with new_blksize new_recfm
     if new_blksize > 0
        then new_blksize = 'BLKSIZE('new_blksize')'
        else new_blksize = null
@@ -1735,9 +1873,10 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     if r_rc = 0 then
     'delete' zos
     call outtrap 'off'
+    dsn = zospds
     x = update_filennn(file)
   end
-  else  zospds = strip(zos,'B',"'")
+  else zospds = strip(zos,'B',"'")
 
   if r_rc > 0 then do
     zerrsm = 'Error.'
@@ -1766,13 +1905,13 @@ Get_New_BLKSize: Procedure
   parse value xi.i with 'DSORG='dsorg 'LRECL='lrecl 'BLKSIZE='blksize ,
         'RECFM='recfm
   Select
-     When left(recfm,1) = 'U' then return 32760
-     When left(recfm,1) = 'V' then return 32760
+     When left(recfm,1) = 'U' then return 32760 recfm
+     When left(recfm,1) = 'V' then return 32760 recfm
      When left(recfm,1) = 'F' then do
-          if lrecl = 80 then return 27920
-          else return 0
+          if lrecl = 80 then return 27920 recfm
+          else return 0 recfm
           end
-     Otherwise return 0
+     Otherwise return 0 recfm
      end
 
   /* ----------------------------------------------------------------- *
@@ -1955,8 +2094,8 @@ Do_Refresh:
   | Do UPDATE routine to update for updated files in the    |
   | www.cbttape.org /pub/updates directory.                 |
   |                                                         |
-  | FILEIDX.PDS member zDATE is the date of the last update |
-  | process.                                                |
+  | If an option is provided that is non-blank then only    |
+  | update files that have a local copy                     |
   |                                                         |
   | All files newer than the last update date will be:      |
   |   - downloaded                                          |
@@ -2014,25 +2153,9 @@ Do_Update:
   end
   Address ISPExec
 
-  /* ----------------------------------------------------- *
-  | Check to see when the last UPDATE check was performed |
-  | and save that date.                                   |
-  * ----------------------------------------------------- */
-  if sysdsn("'"cbtidx"(ZDATE)'") = 'OK' then do
-    Address TSO
-    "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZDATE)')"
-    'execio * diskr' cbtdd '(finis stem zdate.'
-    'free f('cbtdd')'
-    Address ISPExec
-  end
-  else zdate.1 = '01/01/01'
-
-  if update_opt /= null then zdate.1 = '01/01/01'
 
   if update_files = null then do
     updates.0 = null
-    zdate = strip(zdate.1)
-    zdate = left(zdate,2)''substr(zdate,4,2)''right(zdate,2)
 
     if g.0 > 0 then do gi = 1 to g.0
       if left(word(g.gi,9),3) /= zip_pfx then iterate
@@ -2051,7 +2174,6 @@ Do_Update:
            udate = ut'/'right(um+100,2)'/'right(ud+100,2)
            udt = ut''right(um+100,2)''right(ud+100,2)
            end
-      if udt < zdate then iterate
       parse value file with (zip_pfx)file'.zip'
       if datatype(word(file,1)) /= 'NUM' then iterate
       update_files = update_files file udate
@@ -2077,27 +2199,44 @@ Do_Update:
   if check_update = 1 then return
 
   updates = update_count
-  call pfshow 'off'
-  'Addpop row(4) column(8)'
-  'Display Panel(cbtpopqu)'
-  drc = rc
-  'Rempop'
-  if drc > 0 then do
-    zerrsm = 'Canceled.'
-    zerrlm = 'CBTTape® Update request canceled.'
-    address ispexec 'Setmsg msg(isrz003)'
-    return drc
+  if update_opt = null then do
+     call pfshow 'off'
+     'Addpop row(4) column(8)'
+     'Display Panel(cbtpopqu)'
+     drc = rc
+     'Rempop'
+     if drc > 0 then do
+       zerrsm = 'Canceled.'
+       zerrlm = 'CBTTape® Update request canceled.'
+       address ispexec 'Setmsg msg(isrz003)'
+       return drc
+     end
   end
 
   download = null
   ftptype = 'UPDATE'
   'vput (ftptype)'
-
   do gi = 1 to words(update_files) by 2
     file = word(update_files,gi)
+    if update_opt /= null then do
+       call outtrap 'z.'
+       Address TSO ,
+       'listc level('cbthlq'.'file_pfx''file')'
+       lrc = rc
+       call outtrap 'off'
+       if pos('NOT FOUND',z.1) > 0 then iterate
+       end
     x = ftp_from_cbt(file)
     if x = 0 then download = download file
   end
+
+  /* clean up updated_files */
+  do xi = 1 to words(download)
+     uf = word(download,xi)
+     up = wordpos(uf,updated_files)
+     updated_files = delword(updated_files,up,2)
+     update_count = update_count -1
+     end
 
   ftptype = null
   'vput (ftptype)'
@@ -2108,12 +2247,6 @@ Do_Update:
     return
   end
   x = update_index()
-  Address TSO
-  zdate.1 = date('o')
-  zdate.0 = 1
-  "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZDATE)')"
-  'execio * diskw' cbtdd '(finis stem zdate.'
-  'free f('cbtdd')'
   Address ISPExec
   call do_refresh
   zerrsm = 'Updated'
@@ -2168,6 +2301,7 @@ Update_Index:
 
   do ix = 1 to words(download)
     file = word(download,ix)
+    dsn = get_file(file)
     x = update_filennn(file)
   end
   Address ISPExec
@@ -2182,25 +2316,29 @@ Update_Filennn:
   save_addr = address()
   if save_addr /= 'TSO' then Address TSO
   if length(file) = 3
-  then mem = '@FILE'file
-  else mem = '@FIL'file
+     then mem = '@FILE'file
+     else mem = '@FIL'file
   input = "'"cbthlq"."file_pfx""file".PDS("mem")'"
   output = "'"cbtidx"("file_pfx""file")'"
-  if sysdsn(input) /= 'OK' then return 4
-  x = listdsi(input)
-  if x > 4 then return 4
-  if sysdsorg = 'PS' then return 4
-  if sysrecfm = 'U' then return 4
-  udd = 'CBT'time('s')
-  'alloc f('udd') shr reuse ds('input')'
-  'execio * diskr' udd '(finis stem inp.'
-  'alloc f('udd') shr reuse ds('output')'
-  'execio * diskw' udd '(finis stem inp.'
-  'Free f('udd')'
-  drop inp.
-  if save_addr = 'TSO' then return 0
-  Address ISPExec
-  return 0
+  x = listdsi("'"dsn"'")
+  Select
+    When x > 4 then return 4
+    When sysdsorg = 'PS' | sysrecfm = 'U' then
+         rc = get_cbt_file_info(file)
+    When sysdsn(input) /= 'OK' then return 4
+    Otherwise do
+      udd = 'CBT'time('s')
+      'alloc f('udd') shr reuse ds('input')'
+      'execio * diskr' udd '(finis stem inp.'
+    end
+    end
+    'alloc f('udd') shr reuse ds('output')'
+    'execio * diskw' udd '(finis stem inp.'
+    'Free f('udd')'
+    drop inp.
+    if save_addr = 'TSO' then return 0
+    Address ISPExec
+    return 0
 
   /* ----------------- *
   | Copy the CBT file |
@@ -2278,19 +2416,18 @@ Do_Popup:
 
   /* ------------------------------------------------ *
   | Build/Recreate the CBTIndex and FILEnnn members. |
-  | and remove the ZDATE member as it is no longer   |
-  | useful with the CBTINDEX rebuilt.                |
   * ------------------------------------------------ */
 Build_Index:
   if tab_open = 1 then do
     Address ISPExec 'tbend' cbtdd
     tab_open = 0
   end
-  idxllqs = file_pfx"001.DATA"
   x = listdsi("'"cbthlq"."idxllqs"'")
   if x > 4 then do
     if update = 1 then do
       x = ftp_from_cbt('001')
+      if x > 0 then
+        return x
     end
     else x = 4
     if x > 0 then do
@@ -2301,14 +2438,10 @@ Build_Index:
         'www.cbttape.org possibly due to a firewall preventing' ,
         'FTP from accessing the site.'
       'Setmsg msg(isrz003)'
-      return
+      return x
     end
   end
   call bldindex
-  Address TSO
-  call outtrap 'x.'
-  "Delete '"cbtidx"(ZDATE)'"
-  call outtrap 'off'
   Address ISPExec
   zerrsm = 'Rebuild.'
   zerrlm = cbtindex 'has been created/recreated.'
@@ -2318,11 +2451,11 @@ Build_Index:
   | If the FILEIDX is a PDS do a Compress |
   * ------------------------------------- */
   x = listdsi("'"cbtidx"'" "DIR")
-  if SYSADIRBLK = 'NO_LIM' then return
+  if SYSADIRBLK = 'NO_LIM' then return 0
   "lminit dataid(lmcomp) dataset('"cbtidx"') enq(exclu)"
   'lmcomp dataid('lmcomp')'
   'lmfree dataid('lmcomp')'
-  return
+  return 0
 
   /* --------------------  rexx procedure  -------------------- *
   * Name:      LoadISPF                                        *
@@ -2613,10 +2746,10 @@ Alloc_DD:
   arg dd
   Address TSO
   if pos(left(dd,2),"lc le") > 0 then
-  "Alloc f("dd") unit(sysda) spa(5,5) dir(5)",
+  "Alloc f("dd") unit(3390) spa(5,5) dir(5)",
     "recfm(v b) lrecl(255) blksize(32760)"
   else
-  "Alloc f("dd") unit(sysda) spa(5,5) dir(5)",
+  "Alloc f("dd") unit(3390) spa(5,5) dir(5)",
     "recfm(f b) lrecl(80) blksize(23440)"
   return
 
@@ -2888,7 +3021,7 @@ REXXCSI:
     END
     RETURN 0
 
-  BLDIndex:
+BLDIndex:
     /* --------------------  rexx procedure  -------------------- *
     | Name:      BLDINDEX                                        |
     |                                                            |
@@ -2898,6 +3031,10 @@ REXXCSI:
     * ---------------------------------------------------------- */
 
     cbt_file001 = "'"cbthlq"."file_pfx"001.DATA'"
+
+  if pos('COV',file_pfx) = 0
+     then rebuild_cbt = 1
+     else rebuild_cov = 1
 
     dd = 'cbt'time('s')
 
@@ -2932,6 +3069,7 @@ REXXCSI:
       "alloc f("cbtdd") shr reuse ds('"cbtidx"(ZVER)')"
       zver.0 = 1
       zver.1 = substr(version,2)
+      cbtover = zver.1
       'execio * diskw' cbtdd '(finis stem zver.'
       'free f('cbtdd')'
       drop zver.
@@ -3242,7 +3380,6 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %Only+    Removes all rows without the requested string    (e.g. O JCL)
 +            - searches in the 1 line description
 +
-+
                   +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH
@@ -3269,11 +3406,11 @@ $z+]file @desc                                                  ]z[z@fdate
 +            - abbreviations File (F) and Date (D)
 +  %UPDate+  Check and Download all Updated CBT files since   (e.g. UPD)
 +            the last Update
-+            - Any non-blank option to do all dates           (e.g. UPD X)
 +            - Also updates the individual FILEnnn members
 +  %CUrrent+ Switch to the Current CBT Files   (see Flip)     (e.g. CU)
 +  %OVerflow+Switch to the Overflow CBT Files  (see Flip)     (e.g. OV)
 +  %/+       Popup Menu of Commands
++
 +
 +
                    +Press%Enter+to continue with the Tutorial
@@ -3597,6 +3734,42 @@ if (&zerrsm NE &Z)
    .CURSOR = NEWDSN
 if (&zerrsm EQ &Z)
   ver (&newdsn,nb,dsnameq)
+)End
+>Panel CBTPOPF1
+)Attr
+ $ type(output) caps(off) intens(low)
+ [ type(output) intens(high)
+ @ type(input ) caps(on) hilite(uscore)
+)Body Window(64,7)
++
++File 001 has been updated on the CBTTape FTP Site.
++
++Press%Enter+to use FTP to download this file from cbttape.org
++or%F3+to cancel the download.
++
++After the update you should consider doing a%REBuild
+)Init
+ &zwinttl = 'CBTTape® FTP File Prompt'
+)Proc
+)End
+>Panel CBTPOPUP
+)Attr
+ $ type(output) caps(off) intens(low)
+ [ type(output) intens(high)
+ @ type(input ) caps(on) hilite(uscore)
+)Body Window(64,7)
++
++Enter Update Option:@z+ %A+all%U+local
++
+%A+Download ALL Updated Files
+%U+Download Updates for all Local Files
++
++or%F3+to cancel the update.
+)Init
+ .zvars = '(upopt)'
+ &zwinttl = 'CBTTape® Update Prompt'
+)Proc
+  ver (&upopt,NB,LIST,A,U)
 )End
 >Panel CBTPOPQ
 )Attr
