@@ -1,6 +1,3 @@
-  /* ------------------- REXX ------------------------- *
-   | This is a work in progress and NOT for general use |
-   * -------------------------------------------------- */
   /* ---------------------- REXX ----------------------------- */
   ver = '2.00'
   /*Name:  CBT                                                |
@@ -32,6 +29,8 @@
   |         will be automatically downloaded.                 |
   |      2. The overflow will be in COVINDEX and members      |
   |         FILOnnnn                                          |
+  |      3. If DD NOCURL is allocated then curl will not be   |
+  |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
@@ -492,6 +491,9 @@ Do_Index:
   home = pw.pw_dir
 
   if update = 1 then call check_curl
+  x = listdsi('NOCURL' 'FILE')
+  if sysreason = 3 then
+     curl_ok = 0
   if curl_ok = 0 then
   if update = 1 then call check_ftp
   if update = 1 then ftpstat = 'Enabled'
