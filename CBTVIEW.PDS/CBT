@@ -34,7 +34,7 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2025-02-14 LBD 2.00                                  |
+  |      2025-02-15 LBD 2.00                                  |
   |                   - Restructure big time so as to support |
   |                     CURL if available instead of FTP      |
   |                   - Replace cat with readfile and rm      |
@@ -491,9 +491,6 @@ Do_Index:
   home = pw.pw_dir
 
   if update = 1 then call check_curl
-  x = listdsi('NOCURL' 'FILE')
-  if sysreason = 3 then
-     curl_ok = 0
   if curl_ok = 0 then
   if update = 1 then call check_ftp
   if update = 1 then ftpstat = 'Enabled'
@@ -835,10 +832,16 @@ Check_001_Update:
   fupflg = null
   return 0
 
-  /* --------------------------- *
-   | Verify if curl is available |
-   * --------------------------- */
+  /* ------------------------------------------------------------ *
+   | Check if curl is available                                   |
+   | - if the NOCURL DD is allocated then the answer is always NO |
+   * ------------------------------------------------------------ */
 Check_Curl:
+  x = listdsi('NOCURL' 'FILE')
+  if sysreason = 3 then do
+     curl_ok = 0
+     return
+     end
   cmd = 'command -v curl'
   x = do_command(cmd)
   x = g.0
