@@ -34,7 +34,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2025-02-15 LBD 2.00                                  |
+  |      2025-02-18 LBD 2.00                                  |
+  |                   - Add type (ftp/curl) to table title    |
   |                   - Restructure big time so as to support |
   |                     CURL if available instead of FTP      |
   |                   - Replace cat with readfile and rm      |
@@ -494,6 +495,13 @@ Do_Index:
   if curl_ok = 0 then
   if update = 1 then call check_ftp
   if update = 1 then ftpstat = 'Enabled'
+
+  if update = 1 then do
+     if curl_ok = 1
+        then mode = '(curl)'
+        else mode = '(ftp)'
+     end
+   else mode = null
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
@@ -3399,15 +3407,15 @@ Do_File_Pop:
 )Attr
  @ type(output) intens(low) color(green)
  ! type(output) intens(low) color(white) caps(off)
+ # type(output) intens(low) color(turq) caps(off)
  { type(output) intens(low) color(white) hilite(uscore)
  ] type(output) intens(low) color(turq ) skip(on)
  [ type(output) intens(high)
- # type(text)               color(turq)
  _ type(input ) hilite(uscore)
  $ type(input ) hilite(uscore) caps(on)
  ~ type(ps)
 )Body Expand(\\)
-%CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
+%CBTTape®!ver #mode  %The!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
 +                             \ \~Exit+
 +S ~File+ Description                                               ~Date+
