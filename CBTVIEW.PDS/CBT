@@ -34,10 +34,7 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2025-02-20 LBD 2.00                                  |
-  |                   - Add type (ftp/curl) to table title    |
-  |                   - Default to FTP it is available if not |
-  |                     then try curl - otherwise Offline     |
+  |      2025-02-15 LBD 2.00                                  |
   |                   - Restructure big time so as to support |
   |                     CURL if available instead of FTP      |
   |                   - Replace cat with readfile and rm      |
@@ -493,28 +490,10 @@ Do_Index:
      'getpwnam (user) pw.'
   home = pw.pw_dir
 
+  if update = 1 then call check_curl
+  if curl_ok = 0 then
   if update = 1 then call check_ftp
-  if update = 1 then
-     if ftpstat /= 'Enabled' then
-     call check_curl
-
-  if update = 1 then do
-    if curl_ok = 1
-    then mode = 'Using curl'
-    else mode = 'Using ftp'
-  end
-  else mode = 'Offline'
-
-  if mode = 'Offline' then do
-    update = 0
-    ftpstat = 'Disabled'
-    zerrsm = 'Warning.'
-    zerrlm = 'Network access to www.cbttape.org is not working. This may' ,
-      'be a problem with your local system or the site may be down.' ,
-      'Downloads are being disabled for this session. If this is permanent' ,
-      'then change the CBTCONFG to update = 0.'
-    'Setmsg msg(isrz003)'
-  end
+  if update = 1 then ftpstat = 'Enabled'
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
@@ -876,7 +855,6 @@ Check_Curl:
   * ---------------------- */
 Check_ftp:
   if curl_ok = 1 then return
-  call setup_ftp
   cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
   x = Generate_Command('CHECK')
   cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file
@@ -884,10 +862,17 @@ Check_ftp:
   do cfi = 1 to g.0
     if pos('220 ProFTPD Server (ftp.cbttape.org)',g.cfi) > 0 then do
       update = 1
-      ftpstat = 'Enabled'
       return
     end
   end
+  update = 0
+  ftpstat = 'Disabled'
+  zerrsm = 'Warning.'
+  zerrlm = 'FTP to www.cbttape.org is not working. This may be a' ,
+    'problem with your local system or the site may be down.' ,
+    'Downloads are being disabled for this session. If this is permanent' ,
+    'then change the CBTCONFG to update = 0.'
+  'Setmsg msg(isrz003)'
   return
 
   /* ---------------------------------------------- *
@@ -3414,17 +3399,17 @@ Do_File_Pop:
 )Attr
  @ type(output) intens(low) color(green)
  ! type(output) intens(low) color(white) caps(off)
- # type(output) intens(low) color(yellow) caps(off)
  { type(output) intens(low) color(white) hilite(uscore)
  ] type(output) intens(low) color(turq ) skip(on)
  [ type(output) intens(high)
+ # type(text)               color(turq)
  _ type(input ) hilite(uscore)
  $ type(input ) hilite(uscore) caps(on)
  ~ type(ps)
 )Body Expand(\\)
-%CBTTape®!ver        %The!title   %CBT{cver%ISPF Dialog
+%CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
-#mode                         \ \~Exit+
++                             \ \~Exit+
 +S ~File+ Description                                               ~Date+
 )Model
 $z+]file @desc                                                  ]z[z@fdate
