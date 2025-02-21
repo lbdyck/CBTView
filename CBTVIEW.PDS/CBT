@@ -34,7 +34,7 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2025-02-15 LBD 2.00                                  |
+  |      2025-02-21 LBD 2.00                                  |
   |                   - Restructure big time so as to support |
   |                     CURL if available instead of FTP      |
   |                   - Replace cat with readfile and rm      |
@@ -989,6 +989,7 @@ Do_Select:
         fp = wordpos(file,update_files)
         if fp > 0 then
         update_files = delword(update_files,fp,2)
+        fupflg = null
         if csels = 1 then do
           zerrsm = 'Updated.'
           zerrlm = 'The requested file(s) has been updated with a clean' ,
@@ -1298,7 +1299,7 @@ Get_DSN:
   x = get_file()
   if x = 0 then do
     if sysvar('SYSISPF') /= 'ACTIVE' then return
-    if wordpos(file,updated_files) > 0 then do
+    if wordpos(file,save_update_files) > 0 then do
        ftptype = 'UPDATE'
        fupflg = '+'
        end
@@ -2339,6 +2340,7 @@ Do_Update:
       update_files = update_files file udate
     end
 
+  save_update_files = update_files
   updated_files = update_files
   if curl_ok = 0 then do
     toc = userid()'_toc'
