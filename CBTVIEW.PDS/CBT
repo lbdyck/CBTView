@@ -491,9 +491,15 @@ Do_Index:
   home = pw.pw_dir
 
   if update = 1 then call check_curl
-  if curl_ok = 0 then
-  if update = 1 then call check_ftp
-  if update = 1 then ftpstat = 'Enabled'
+  if curl_ok = 0 then do
+    if update = 1 then call check_ftp
+    if update = 1 then do
+      ftpstat = 'Enabled'
+      mode    = 'FTP'
+    end
+    else mode = 'Offline'
+  end
+  else mode = 'Curl'
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
@@ -942,7 +948,7 @@ Do_Select:
     dsn = get_file()
     if dsn = 0 & update = 0 then do
       zerrsm = 'Not Available.'
-      zerrlm = 'File' file 'is not available and FTP is not enabled.'
+      zerrlm = 'File' file 'is not available and Download is not enabled.'
       'setmsg msg(isrz003)'
       csel = null
       return 4
@@ -1709,7 +1715,7 @@ FTP_DSN:
     address tso
     if drc > 0 then do
       zerrsm = 'Canceled.'
-      zerrlm = 'File FTP request canceled.'
+      zerrlm = 'File Download request canceled.'
       address ispexec 'Setmsg msg(isrz003)'
       return 4
     end
@@ -1801,7 +1807,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   get_file = zip_pfx''file'.zip'
 
   Address ISPExec
-  ms1 = 'Initiating FTP from WWW.CBTTAPE.ORG'
+  ms1 = 'Initiating Download from WWW.CBTTAPE.ORG'
   ms2 = 'for file:' get_file
   if left(fdate,1) /= 'V' then
   if fupflg /= null
@@ -3456,8 +3462,8 @@ $z+]file @desc                                                  ]z[z@fdate
 +the]CBTTAPE®+'tape', updates, and overflow, directly from your z/OS
 +TSO/ISPF session.
 +
-+If FTP is available, then ALL of the]CBTTAPE®+files are available to be
-+downloaded on demand (when you want to check them out). If FTP is not
++If download is available, then ALL of the]CBTTAPE®+files are available to be
++downloaded on demand (when you want to check them out). If download is not
 +available, then each individual file will need to be downloaded and made
 +available on z/OS for this dialog to work.
 +
@@ -3494,8 +3500,8 @@ $z+]file @desc                                                  ]z[z@fdate
 `Command ===>_zcmd
 `
 %Notes:`If the CBT file does not exist locally (no%*`on the right) you will
-`be prompted to install it using FTP. If a file has an update available then
-`a%+`on the right, along with update date.
+`be prompted to install it using download. If a file has an update available
+`then a%+`on the right, along with update date.
 `
 `To download a single file, select it using any line command (except I or S).
 `If an update is available for the file then it will be downloaded.
@@ -3692,14 +3698,14 @@ $z+]file @desc                                                  ]z[z@fdate
 +that it works with refreshed, along with all of the FILEnnnn members in the
 +hlq.FILEIDX.PDS.
 +
-+The process is simple:  1. Update the%U+(update) action on FILE001 to update
-+                           your local copy of FILE001.
-+                           - if you don't have FTP ability then manually do it
-+                        2. Invoke the%REBUILD+command
-+                        3. Note that ALL files that were updated with the
-+                           refresh will be identified with the update flag,
-+                           and the date field will have the CBT version number.
-+
++The process is simple:
++1. Update the%U+(update) action on FILE001 to update
++   your local copy of FILE001.
++   - if you don't have download ability then manually do it
++2. Invoke the%REBUILD+command
++3. Note that ALL files that were updated with the
++   refresh will be identified with the update flag,
++   and the date field will have the CBT version number.
 +
 +
 +
@@ -3723,7 +3729,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %Canceled.     +
 +     Rebuild canceled.
 +  %Canceled.     +
-+     File FTP request canceled.
++     File download request canceled.
 +  %Canceled.     +
 +     CBTTape® Update request canceled.
 +  %Canceled.     +
@@ -3779,7 +3785,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %No Update.    +
 +     Update is disabled for this site.
 +  %Not Available.+
-+     File xxx is not available and FTP is not enabled.
++     File xxx is not available and download is not enabled.
 +  %Not Allowed.  +
 +     Update processing is not allowed based on the
 +     customization settings for this site.
@@ -3907,12 +3913,12 @@ if (&zerrsm EQ &Z)
 +
 +File 001 has been updated on the CBTTape FTP Site.
 +
-+Press%Enter+to use FTP to download this file from cbttape.org
++Press%Enter+to download this file from cbttape.org
 +or%F3+to cancel the download.
 +
 +After the update you should consider doing a%REBuild
 )Init
- &zwinttl = 'CBTTape® FTP File Prompt'
+ &zwinttl = 'CBTTape® Download File Prompt'
 )Proc
 )End
 >Panel CBTPOPUP
@@ -3943,10 +3949,10 @@ if (&zerrsm EQ &Z)
 +
 +File[file+has not been downloaded to this system.
 +
-+Press%Enter+to use FTP to download this file from cbttape.org
++Press%Enter+to download this file from cbttape.org
 +or%F3+to cancel the download.
 )Init
- &zwinttl = 'CBTTape® FTP File Prompt'
+ &zwinttl = 'CBTTape® Download File Prompt'
 )Proc
 )End
 >Panel CBTPOPQR
@@ -3963,7 +3969,7 @@ if (&zerrsm EQ &Z)
 +
 +Press%Enter+to continue with the rebuild or%F3+to cancel.
 )Init
- &zwinttl = 'CBTTape® FTP File Prompt'
+ &zwinttl = 'CBTTape® Download File Prompt'
 )Proc
 )End
 >Panel CBTPOPQU
@@ -3974,7 +3980,7 @@ if (&zerrsm EQ &Z)
 +
 +There are$z  +updates available on the CBTTape® Updates site.
 +
-+Press%Enter+to use FTP to download them to your local system
++Press%Enter+to download them to your local system
 +or%F3+to cancel the download.
 )Init
 .zvars = '(updates)'
@@ -4007,7 +4013,7 @@ $t2      +Index Refresh:@cbtinfo
 +Downloaded Files:      @down
 +Available Updates:     @cbtup
 +Default Select Action: @ispfacts
-+FTP Status:            @ftpstat
++Download Mode:         @mode
 +Create Backups:        @cbtbkup
 +RECEIVE SYSOUT class:  @sysout
 +PDS Command:           @cbtp
