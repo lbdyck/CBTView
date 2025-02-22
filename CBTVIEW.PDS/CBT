@@ -742,7 +742,7 @@ Do_Index:
     total_time    = e_time    - s_time
     total_wtime   = e_wtime   - s_wtime
     pmsg = 'Startup timing - service:' total_service,
-           'CPU time:' total_time
+           'CPU seconds:' total_time 'Wall seconds:' total_wtime
     startup = 0
   end
   else pmsg = null
@@ -2027,14 +2027,14 @@ Do_Command:
   parse arg cmd
   if datatype(env.0) /= 'NUM' then call get_env
   drop g. e.
-  x = bpxwunix(cmd,,g.,e.,env.,1)
+  x = bpxwunix(cmd,,g.,e.,env.)
   return x
 
 Get_Env:
-  x = bpxwunix('env',,env.,e.,,1)
-  x = env.0 + 1
-  env.x = 'HOME='home
-  env.0 = x
+  genv.0 = 2
+  genv.1 = 'HOME='home
+  genv.2 = '_BPX_SHAREAS=YES'
+  x = bpxwunix('env',,env.,e.,genv.,1)
   drop e.
   return
 
