@@ -1204,7 +1204,7 @@ Do_ZCMD:
     end
     When abbrev('SEARCH',translate(word(zcmd,1)),1) = 1 then
     call do_search
-    When abbrev('LOCAL',translate(word(zcmd,1)),2) = 1 then
+    When word(zcmd,1) = 'LOCAL' then
     call Do_Local
     When abbrev('ONLINE',translate(word(zcmd,1)),4) = 1 then
     call Do_Local
@@ -3588,7 +3588,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %History+ Display a change history for the command         (e.g. H)
 +  %Info+    Display CBT Application Summary Information      (e.g. I)
 +            - View the FILEnnnn member in the Index PDS
-+  %LOcal+   Display only local files                         (e.g. LO)
++  %LOCAL+   Display only local files                         (e.g. LOCAL)
 +            - under hlq[cbthlq2
 +  %Locate+  Locates the row with the requested file number   (e.g. L 2)
 +            - leading zero's not required
@@ -4160,7 +4160,7 @@ $t2      +Index Refresh:@cbtinfo
  &Sort     = 'SOrt   '
  &History  = 'History'
  &Info     = 'Info   '
- &Local    = 'LOcal  '
+ &Local    = 'LOCAL  '
  &Locate   = 'Locate '
  &New      = 'New    '
  &Only     = 'Only   '
@@ -4217,7 +4217,7 @@ if zcmd = ''
  FIELD(REBuild  ) VAR(zcmd) VAL('REBUILD ')
  FIELD(Refresh  ) VAR(zcmd) VAL('REFRESH ')
  FIELD(Search   ) VAR(zcmd) VAL('SEARCH  ')
- FIELD(LOcal    ) VAR(zcmd) VAL('LOCAL   ')
+ FIELD(LOCAL    ) VAR(zcmd) VAL('LOCAL   ')
  FIELD(SORT     ) VAR(zcmd) VAL('SORT    ')
  FIELD(UPDate   ) VAR(zcmd) VAL('UPDATE  ')
  FIELD(CURrent  ) VAR(zcmd) VAL('CURRENT ')
