@@ -34,7 +34,9 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2025-02-21 LBD 2.00                                  |
+  |      2025-02-22 LBD 2.00                                  |
+  |                   - Add CBTCONFG option access            |
+  |                     curl, ftp, offine                     |
   |                   - Restructure big time so as to support |
   |                     CURL if available instead of FTP      |
   |                   - Replace cat with readfile and rm      |
@@ -340,9 +342,9 @@
   |                                                           |
   * --------------------------------------------------------- */
 
-  parse value '' with null rfind_opt tab_open ftptype ,
+  parse value '' with null rfind_opt tab_open ftptype pmsg ,
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
-    special cbtver ispfact file043_update save_update ,
+    special cbtver ispfact file043_update save_update access startup ,
     rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok
 
   arg option '\' newhlq
@@ -354,6 +356,14 @@
       'setmsg msg(isrz003)'
       signal done
     end
+
+  /* --------------------------- *
+   | Capture startup timing info |
+   * --------------------------- */
+   startup = 1
+   s_service = sysvar('SYSSRV')
+   s_time    = sysvar('SYSCPU')
+   s_wtime   = time('s')
 
   /* ---------------------------------------------------- *
   | CBT Exec Defaults - override in member CBTCONFG      |
@@ -379,7 +389,12 @@
   |                                                      |
   | backup = 0 do NOT create backup files for updates    |
   |        = 1 Create backup files for updated .Dyymmdd  |
+  |                                                      |
+  | access = O Work offline                              |
+  |        = C Use curl if avaiable otherwise FTP        |
+  |        = F Use FTP                                   |
   * ---------------------------------------------------- */
+  access  = 'C'
   action  = 'I'
   backup  = '0'
   sysout  = 'Z'
@@ -490,6 +505,11 @@ Do_Index:
      'getpwnam (user) pw.'
   home = pw.pw_dir
 
+  if access = 'O' then do
+     update = 0  /* work offline */
+     mode   = ''
+     end
+
   if update = 1 then call check_curl
   if curl_ok = 0 then do
     if update = 1 then call check_ftp
@@ -497,9 +517,10 @@ Do_Index:
       ftpstat = 'Enabled'
       mode    = 'FTP'
     end
-    else mode = 'Offline'
+    else mode = ''
   end
-  else mode = 'Curl'
+  else if update = 1
+       then mode = 'Curl'
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
@@ -710,6 +731,22 @@ Do_Index:
   if cbtver = null
      then cbtver = cbtover
 
+  /* --------------------------- *
+   | Report timing if on startup |
+   * --------------------------- */
+  if startup = 1 then do
+    e_service = sysvar('SYSSRV')
+    e_time    = sysvar('SYSCPU')
+    e_wtime   = time('s')
+    total_service = e_service - s_service
+    total_time    = e_time    - s_time
+    total_wtime   = e_wtime   - s_wtime
+    pmsg = 'Startup timing - service:' total_service,
+           'time:' total_time
+    startup = 0
+  end
+  else pmsg = null
+
   do forever
     cbtrfind = 'PASSTHRU'
     ftptype = null
@@ -843,6 +880,10 @@ Check_001_Update:
    | - if the NOCURL DD is allocated then the answer is always NO |
    * ------------------------------------------------------------ */
 Check_Curl:
+  if access = 'F' then do
+     curl_ok = 0
+     return
+     end
   x = listdsi('NOCURL' 'FILE')
   if sysreason = 3 then do
      curl_ok = 0
@@ -892,6 +933,8 @@ Check_Overrides:
     do i = 1 to ovr.0
       if left(ovr.i,1) = '*' then iterate
       Select
+        When translate(word(ovr.i,1)) = 'ACCESS' then
+          access = translate(word(ovr.i,3))
         When translate(word(ovr.i,1)) = 'ACTION' then
           action = translate(word(ovr.i,3))
         When translate(word(ovr.i,1)) = 'PDS' then
@@ -2000,6 +2043,7 @@ Get_Env:
   * ----------------------------------------- */
 Generate_Command:
   arg wcf_opt
+  ftpc = 0
   if curl_ok = 0 then call setup_ftp
   if wcf_opt = 'FTP' then call setup_ftp_file
   if wcf_opt = 'UPDATE' then call setup_ftp_update
@@ -3408,16 +3452,16 @@ Do_File_Pop:
  @ type(output) intens(low) color(green)
  ! type(output) intens(low) color(white) caps(off)
  { type(output) intens(low) color(white) hilite(uscore)
- ] type(output) intens(low) color(turq ) skip(on)
+ ] type(output) intens(low) color(turq ) skip(on) caps(off)
  [ type(output) intens(high)
  # type(text)               color(turq)
  _ type(input ) hilite(uscore)
  $ type(input ) hilite(uscore) caps(on)
  ~ type(ps)
 )Body Expand(\\)
-%CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
+%CBTTape®!pver      %!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
-+                             \ \~Exit+
+]pmsg                         \ \~Exit+
 +S ~File+ Description                                               ~Date+
 )Model
 $z+]file @desc                                                  ]z[z@fdate
@@ -3425,8 +3469,11 @@ $z+]file @desc                                                  ]z[z@fdate
  .help = cbth
  .zvars = '(csel fupflg online)'
  &cscr = 'CSR'
-*REXX(* cbtver cver)
+*REXX(* cbtver cver pver mode ver)
  cver = 'V'cbtver
+ if mode /= ''
+    then pver = ver'('mode')'
+    else pver = ver
 *EndRexx
 )Proc
  IF (&ZCMD = &Z)
@@ -4013,7 +4060,7 @@ $t2      +Index Refresh:@cbtinfo
 +Downloaded Files:      @down
 +Available Updates:     @cbtup
 +Default Select Action: @ispfacts
-+Download Mode:         @mode
++Download Mode:         @modex
 +Create Backups:        @cbtbkup
 +RECEIVE SYSOUT class:  @sysout
 +PDS Command:           @cbtp
@@ -4021,7 +4068,7 @@ $t2      +Index Refresh:@cbtinfo
 +
 )Init
 &zwinttl = 'The Official CBT Dialog Information'
-*Rexx(* t1 t2 title)
+*Rexx(* t1 t2 title modex mode)
  if title = 'Official'
     then do
          t1 = 'CBTINDEX'
@@ -4031,6 +4078,8 @@ $t2      +Index Refresh:@cbtinfo
          t1 = 'COVINDEX'
          t2 = 'COVINDEX'
          end
+ if mode = '' then modex = 'Offline'
+    else modex = mode
 *Endrexx
 )Proc
 )End
