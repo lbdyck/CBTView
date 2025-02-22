@@ -742,7 +742,7 @@ Do_Index:
     total_time    = e_time    - s_time
     total_wtime   = e_wtime   - s_wtime
     pmsg = 'Startup timing - service:' total_service,
-           'time:' total_time
+           'CPU time:' total_time
     startup = 0
   end
   else pmsg = null
@@ -763,6 +763,7 @@ Do_Index:
       trc = rc
       cbtrfind = null
       find_csr = null
+      pmsg = null
       'vput (cbtrfind)'
       if trc > 4 then call done
       ctop = ztdtop
