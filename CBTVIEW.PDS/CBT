@@ -2034,8 +2034,18 @@ Get_Env:
   genv.0 = 2
   genv.1 = 'HOME='home
   genv.2 = '_BPX_SHAREAS=YES'
-  x = bpxwunix('env',,env.,e.,genv.,1)
-  drop e.
+  x = bpxwunix('env',,tenv.,e.,genv.,1)
+  /* ------------------------- *
+   | Remove all logon messages |
+   * ------------------------- */
+  ec = 0
+  do i = 1 to tenv.0
+     if pos('=',tenv.i) = 0 then iterate
+     ec = ec + 1
+     env.ec = tenv.i
+     end
+  env.0 = ec
+  drop e. genv. tenv.
   return
 
   /* ----------------------------------------- *
