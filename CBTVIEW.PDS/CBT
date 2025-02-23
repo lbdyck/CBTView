@@ -19,6 +19,7 @@
   |               (default)                                   |
   |             * if O then process the Overflow datasets     |
   |             * if N then act as if no FTP to start with    |
+  |             * if T then show startup timing               |
   |                                                           |
   |         \ is the separator                                |
   |                                                           |
@@ -349,7 +350,7 @@
 
   arg option '\' newhlq
   if option \= ' ' then
-    if pos(option, 'ONB') = 0 then do
+    if pos(option, 'ONBT') = 0 then do
       zerrsm = null
       zerrlm = "Invalid option '"option"'"
       Address ISPExec
@@ -734,6 +735,7 @@ Do_Index:
   /* --------------------------- *
    | Report timing if on startup |
    * --------------------------- */
+   if option = 'T' then
   if startup = 1 then do
     e_service = sysvar('SYSSRV')
     e_time    = sysvar('SYSCPU')
@@ -3792,8 +3794,16 @@ $z+]file @desc                                                  ]z[z@fdate
 +     CBTTape® Update request canceled.
 +  %Canceled.     +
 +     Copy canceled.
++  %Canceled.
++     Update canceled.
 +  %Copied.       +
 +     DSN has been copied to NEWDSN.
++  %Disabled.
++     FTP disabled.
++  %Downloads.
++     nnnn Files downloaded.
++  %Enabled.
++     FTP enabled.
 +  %Error.        +
 +     Sort requires a column name (File or Date), with
 +     an optional direction (A or D).
@@ -3810,6 +3820,13 @@ $z+]file @desc                                                  ]z[z@fdate
 +     either missing or corrupt.
 +  %Error.        +
 +     Copy From and To may not be the same dataset name.
++  %Error.
++     Unable to build the CBT Index as Hlq.CBT001.DATA is
++     not available and FTP is not enabled.
++  %Error.
++     CBT index in Hlq.CBT001.DATA is not built, contact CBT support.
++  %Error.
++     The RECEIVE failed and the input file has been retained: dsn
 +  %Fatal.        +
 +     CBT FILE/COV001.DATA is not available under cbthlq
 +     and was not able to be downloaded via FTP from
@@ -3836,10 +3853,19 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %Invalid.      +
 +     Search requires a search string...
 +  %Invalid.      +
-+      X is an invalid SET value for the default selection action. Try
-+      again using B,E,I,P,R, or V.
++     X is an invalid SET value for the default selection action. Try
++     again using B,E,I,P,R, or V.
++  %Invalid.
++     Sort field of field is not valid - try FILE or DATE.
++  %Invalid.
++     Sort order of direction is not valid - try A or D.
 +  %Missing.      +
 +     Member xxx does not exist for this file.
++  %New CBT Version.
++     CBT Version vvv is now available. You should
++     download FILE001 and then use the REBUILD command to refresh
++     the CBT Index used by this dialog along with all the FILEnnn
++     members. Your current version is:  vvv
 +  %No Update.    +
 +     Update is disabled for this site.
 +  %Not Available.+
