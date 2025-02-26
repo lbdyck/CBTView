@@ -3738,17 +3738,17 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +The CBT Command has the following startup options:
 +
-      %CBT option \ althlq
+      %CBT option(s) \ althlq
 +
 +   options:  -C   use curl for access
 +             -F   use ftp for access
 +             -O   offline access
 +             -T   show startup timing
 +
-+          %althlq+  Is the HLQ for the desired FILEIDX.PDS dataset to use
-+                    instead of the default dataset.
++   %althlq+  Is the HLQ for the desired FILEIDX.PDS dataset to use
++             instead of the default dataset.
 +
-+
++Sample use:  %CBT -C -T
 +
 +
 +
