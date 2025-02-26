@@ -3660,7 +3660,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-                   +Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH1
  &zcont = CBTH2
@@ -3691,7 +3691,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH1
  &zcont = CBTH3
@@ -3723,7 +3723,7 @@ $z+]file @desc                                                  ]z[z@fdate
 [              was updated with the current 'tape' version
 [
 [
-[Press%Enter[to continue with the Tutorial
+                  [Press%Enter[to continue with the Tutorial
 )Init
  &zup = CBTH3
  &zcont = CBTH5
@@ -3740,10 +3740,10 @@ $z+]file @desc                                                  ]z[z@fdate
 +
       %CBT option \ althlq
 +
-+Where:    %option+  %O+to process the CBT Overflow Files
-+                    %C+to process the CBT Files (default)
-+                    %N+to bypass checking for updates at startup
-+                       use%Refresh Check+or%R C+to check.
++   options:  -C   use curl for access
++             -F   use ftp for access
++             -O   offline access
++             -T   show startup timing
 +
 +          %althlq+  Is the HLQ for the desired FILEIDX.PDS dataset to use
 +                    instead of the default dataset.
@@ -3755,7 +3755,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH4
  &zcont = CBTH6
@@ -3787,7 +3787,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH5
  &zcont = CBTH7
@@ -3960,7 +3960,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH7
  &zcont = CBTH
