@@ -15,11 +15,12 @@
   | Syntax: %CBT option \ althlq                              |
   |                                                           |
   |         option is:                                        |
-  |             * if C then process the CBT datasets          |
-  |               (default)                                   |
-  |             * if O then process the Overflow datasets     |
-  |             * if N then act as if no FTP to start with    |
-  |             * if T then show startup timing               |
+  |             * if -C then use curl as the access method    |
+  |             * if -F then use FTP as the access method     |
+  |             * if -O then process the Overflow datasets    |
+  |             * if -T then show startup timing              |
+  |                                                           |
+  |             Each option is entered on it's own            |
   |                                                           |
   |         \ is the separator                                |
   |                                                           |
@@ -35,7 +36,8 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
-  |      2025-02-22 LBD 2.00                                  |
+  |      2025-02-26 LBD 2.00                                  |
+  |                   - Enhance options                       |
   |                   - Add CBTCONFG option access            |
   |                     curl, ftp, offine                     |
   |                   - Restructure big time so as to support |
@@ -350,21 +352,25 @@
 
   arg option '\' newhlq
   if option \= ' ' then
-    if pos(option, 'ONBT') = 0 then do
+    do i = 1 to words(option)
+    if pos(word(option,i), '-F -C -O -T') = 0 then do
       zerrsm = null
       zerrlm = "Invalid option '"option"'"
       Address ISPExec
       'setmsg msg(isrz003)'
       signal done
     end
+    end
 
   /* --------------------------- *
    | Capture startup timing info |
    * --------------------------- */
-   startup = 1
-   s_service = sysvar('SYSSRV')
-   s_time    = sysvar('SYSCPU')
-   s_wtime   = time('s')
+   if pos('-T',option) > 0 then do
+      startup = 1
+      s_service = sysvar('SYSSRV')
+      s_time    = sysvar('SYSCPU')
+      s_wtime   = time('s')
+      end
 
   /* ---------------------------------------------------- *
   | CBT Exec Defaults - override in member CBTCONFG      |
@@ -408,7 +414,9 @@
   smsinfo = null
   call syscalls 'ON'
 
-ReStart:
+  /* -------------- *
+   | Continue setup |
+   * -------------- */
   if newhlq = null then do
     parse source with . . ddn dsn .
     if dsn = '?' then do
@@ -437,6 +445,16 @@ ReStart:
   | Now process any site customization overrides |
   * -------------------------------------------- */
   call Check_Overrides
+
+  Select
+    When pos('-C',option) > 0 then access = 'C'
+    When pos('-F',option) > 0 then access = 'F'
+    When pos('-N',option) > 0 then access = 'C'
+    When pos('-O',option) > 0 then access = 'O'
+    otherwise nop
+    end
+
+ReStart:
   save_update = update
   if abbrev('NOCHECK',option,1) = 1 then
      update = 0
@@ -735,7 +753,7 @@ Do_Index:
   /* --------------------------- *
    | Report timing if on startup |
    * --------------------------- */
-   if option = 'T' then
+  if pos('-T',option) > 0 then
   if startup = 1 then do
     e_service = sysvar('SYSSRV')
     e_time    = sysvar('SYSCPU')
