@@ -593,6 +593,9 @@ Do_Index:
 
   do i = 1 to idx.0
     parse value idx.i with file desc 69 fdate vuflag
+    desc = strip(desc)
+    if special /= 1 then
+    if desc = 'EMPTY' then iterate
     if cbtv = null then cbtv = strip(fdate)
     fupflg = null
     file = strip(file)
@@ -632,8 +635,6 @@ Do_Index:
       update_count =  update_count + 1
       update_files = update_files file fdate
     end
-    if special /= 1 then
-    if desc = 'EMPTY' then iterate
     'tbadd' cbtdd
   end
 
@@ -660,7 +661,6 @@ Do_Index:
       else online = '*'
       if special /= 1 then
       if desc = 'EMPTY' then iterate
-      update_count =  update_count + 1
       'tbadd' cbtdd
     end
   end
@@ -2505,7 +2505,7 @@ Do_Update:
      uf = word(download,xi)
      up = wordpos(uf,updated_files)
      updated_files = delword(updated_files,up,2)
-     update_count = update_count -1
+     update_count = update_count - 1
      end
 
   ftptype = null
