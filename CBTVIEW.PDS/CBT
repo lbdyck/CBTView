@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.00'
+  ver = '2.01'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-03-19 LBD 2.01                                  |
+  |                   - Add some error checking               |
   |                                                           |
   |      2025-02-26 LBD 2.00                                  |
   |                   - Enhance options                       |
@@ -716,6 +719,7 @@ Do_Index:
         'members. Your current version is:' cbtover file043_msg
       'setmsg msg(isrz003)'
     end
+    if zerrsm = null then
     if cbtover = cbtver then
     if update_count > 0 then do
       zerrsm = 'Updates.'
@@ -2186,6 +2190,14 @@ Setup_FTP_Update:
         curlcmd = 'curl -s https://cbttape.org/ftp/updatcov/UPDTCOVTOC.txt'
       end
       x = do_command(curlcmd)
+      if g.0 = 0 then do
+         zerrsm = 'Error.'
+         zerrlm = 'www.cbttape.org is not accessible via curl at' ,
+                  'this time.'
+         Address ISPExec,
+         'Setmsg msg(isrz003)'
+         return 0
+         end
       x = process_update_txt()
     end
   end
@@ -2194,6 +2206,7 @@ Setup_FTP_Update:
 Process_Update_Txt:
   cc = 0
   cbtfiles. = null
+  cbtfiles.0 = 0
   drop toc.
   tc = 0
   if file_pfx = 'FILE'
@@ -2233,6 +2246,7 @@ Process_Update_Txt:
   ug = 0
   fc = 0
   drop gtmp.
+  gtmp.0 = 0
   do ic = 1 to g.0
     if left(g.ic,4) = 'HTTP' then do
       fc = fc + 1
@@ -2429,6 +2443,14 @@ Do_Update:
     address syscall 'readfile (toc_file) toc.'
     address syscall 'unlink (toc_file)'  /* unlink = delete */
   end
+
+  if datatype(toc.0) /= 'NUM' then do
+     zerrsm = 'Warning.'
+     zerrlm = 'www.cbttape.org access is unavailable at this time.' ,
+              'Please try again later.'
+     'Setmsg msg(isrz003)'
+     return 0
+     end
 
   Address TSO
   "alloc f("cbtdd") shr reuse ds("cbtindex")"
