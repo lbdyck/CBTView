@@ -7,17 +7,17 @@ This is an ISPF application that provides quick, and easy, access to the
 contents of the CBTTAPE 'tape', updates, and overflow, directly from your
 z/OS TSO/ISPF session.
 
-This application requires that FILE001 be available. If it isn't, and FTP
-is enabled, then it will be downloaded (see Dynamic download below). Then
-the file will be processed to generate an index member (1-line description
-for each CBT file), and a separate member for each CBT file with the full
-file description/summary.
+This application requires that FILE001 be available. If it isn't, and
+FTP, or curl, are enabled, then it will be downloaded (see Dynamic
+download below). Then the file will be processed to generate an index
+member (1-line description for each CBT file), and a separate member for
+each CBT file with the full file description/summary.
 
 This is accomplished in one of two ways.
 
    - Bulk download
      * Download the ADRDSSU, FDR, or AWSTAPE, formats
-     * This is for sites that do not have FTP access to the
+     * This is for sites that do not have HTTP/HTTPS access to the
        www.cbttape.org site
 
    - Dynamic download
@@ -98,8 +98,8 @@ that will host all the CBTTape Datasets.
 
 Be SURE to edit the CBTCONFG member and review the site customization
 settings. This is important if your site does not have the PDS and/or
-the REVIEW commands. Also CRITICAL if your site does NOT allow FTP from
-your z/OS system (change update to 0).
+the REVIEW commands. Also CRITICAL if your site does NOT allow FTP or
+curl, from your z/OS system (change update to 0).
 
 --------------------------------------------------------------------------------
 PRE-REQUISITES
@@ -111,6 +111,8 @@ This application has the following requirements:
 
    - FTP must be enabled to access the WWW.CBTTAPE.ORG site
      * may require opening your firewall if that is allowed
+     >>or<<
+   - Availability of curl in the OMVS path.
 
 ================================================================================
 Installation Tasks
@@ -123,7 +125,7 @@ unzip,  and upload in binary to a z/OS sequential dataset
       NOTE:
       If this has not been done prior to starting this application
       then it will be attempted when this application starts, provided
-      that FTP is allowed.
+      that FTP, or curl, is allowed.
 
 Then copy the CBTVIEW member to a dataset in your SYSPROC or SYSEXEC
 library and update to reference the hlq.FILEIDX.PDS dataset. This will
@@ -208,16 +210,18 @@ In the displayed table an * indicates that the file is available on the
 local system. And a + indicates that there is an update available for
 the file.
 
-If a file has not been downloaded to your local system that the user is
-prompted to allow this application to FTP the file from WWW.CBTTAPE.ORG,
-unzip and then RECEIVE it into a dataset that can be accessed locally.
-This will happen for all selections other than I.
+If a file has not been downloaded to your local system that the user
+is prompted to allow this application to download the file from
+WWW.CBTTAPE.ORG, unzip and then RECEIVE it into a dataset that can be
+accessed locally.  This will happen for all selections other than I.
 
 When attempting to download a file, if an update exists then it will be
 downloaded.
 
-The FTP process utilizes the /tmp filesystem on your z/OS system for the
-file work area. The FTP process is:
+The FTP/curl process utilizes the /tmp filesystem on your z/OS system
+for the file work area.
+
+The FTP process is:
 
    1. Installs the unzip command from the FILEIDX.PDS(unzip) into /tmp
       for use after the zip file is downloaded from WWW.CBTTAPE.ORG.
@@ -231,15 +235,29 @@ file work area. The FTP process is:
    6. If the file was a XMI then perform a TSO RECEIVE
    7. Remove the files from /tmp except for unzip
 
+The curl process is:
+
+   1. Installs the unzip command from the FILEIDX.PDS(unzip) into /tmp
+      for use after the zip file is downloaded from WWW.CBTTAPE.ORG.
+      * this file is shipped in pax format and it automatically
+      * extracted when copied to /tmp
+   2. Invokes the curl OMVS command to download the file
+   4. Unzip's the downloaded CBTnnnn.zip file.
+   5. Performs an OGET of the resulting XMI or DATA file to z/OS
+      in binary
+   6. If the file was a XMI then perform a TSO RECEIVE
+   7. Remove the files from /tmp except for unzip
+
 ================================================================================
 NOTES
 
-   1. If updates are enabled (update = 1 in CBTCONFG) then each time the
-      dialog starts it verifies that FTP is available. If it isn't then
-      it could take a minute or two to timeout at which point a message
-      it generated and FTP is disabled for the session. If this happens
-      verify that ftp to www.cbttape.org works and if it doesn't then
-      change the CBTCONFG update setting to 0 until resolved.
+   1. If updates are enabled (update = 1 in CBTCONFG) then each time
+      the dialog starts it verifies that FTP/curl is available. If it
+      isn't then it could take a minute or two to timeout at which
+      point a message it generated and FTP is disabled for the
+      session. If this happens verify that ftp to www.cbttape.org
+      works and if it doesn't then change the CBTCONFG update setting
+      to 0 until resolved.
 
    2. A check is made to verify that the pax extract of the unzip utility
       was successful. The only times it will fail is if the UNZIP member

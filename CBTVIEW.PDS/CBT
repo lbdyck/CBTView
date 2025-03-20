@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '1.80'
+  ver = '2.02'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -8,17 +8,19 @@
   |          selection.                                       |
   |                                                           |
   |          If the requested file is not on the local        |
-  |          system then prompt to FTP it from cbttape.org,   |
+  |          system then prompt to download from cbttape.org, |
   |          and if there is an update available for the file |
   |          then the update will be downloaded.              |
   |                                                           |
   | Syntax: %CBT option \ althlq                              |
   |                                                           |
   |         option is:                                        |
-  |             * if C then process the CBT datasets          |
-  |               (default)                                   |
-  |             * if O then process the Overflow datasets     |
-  |             * if N then act as if no FTP to start with    |
+  |             * if -C then use curl as the access method    |
+  |             * if -F then use FTP as the access method     |
+  |             * if -O then process the Overflow datasets    |
+  |             * if -T then show startup timing              |
+  |                                                           |
+  |             Each option is entered on it's own            |
   |                                                           |
   |         \ is the separator                                |
   |                                                           |
@@ -29,9 +31,29 @@
   |         will be automatically downloaded.                 |
   |      2. The overflow will be in COVINDEX and members      |
   |         FILOnnnn                                          |
+  |      3. If DD NOCURL is allocated then curl will not be   |
+  |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2025-03-20 LBD 2.02                                  |
+  |                   - Improve curl failure detection        |
+  |                                                           |
+  |      2025-03-19 LBD 2.01                                  |
+  |                   - Add some error checking               |
+  |                                                           |
+  |      2025-02-26 LBD 2.00                                  |
+  |                   - Enhance options                       |
+  |                   - Add CBTCONFG option access            |
+  |                     curl, ftp, offine                     |
+  |                   - Restructure big time so as to support |
+  |                     CURL if available instead of FTP      |
+  |                   - Replace cat with readfile and rm      |
+  |                     with unlink - both syscall services   |
+  |                   - Improve CBTINDEX sort                 |
+  |                   - Correct FILE001 update F3             |
+  |      2024-12-23 LBD 1.81                                  |
+  |                   - Bugfix: Correct update flag           |
   |      2024-12-06 LBD 1.80                                  |
   |                   - Improve error handling (Ray)          |
   |                   - Changed all unit allocations to 3390  |
@@ -329,23 +351,35 @@
   |                                                           |
   * --------------------------------------------------------- */
 
-  parse value '' with null rfind_opt tab_open ftptype ,
+  parse value '' with null rfind_opt tab_open ftptype pmsg ,
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
-    special cbtver ispfact file043_update save_update ,
-    rebuild_cbt rebuild_cov update_cbt update_cov download
+    special cbtver ispfact file043_update save_update access startup ,
+    rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok
 
   arg option '\' newhlq
   if option \= ' ' then
-    if pos(option, 'ONB') = 0 then do
+    do i = 1 to words(option)
+    if pos(word(option,i), '-F -C -O -T') = 0 then do
       zerrsm = null
       zerrlm = "Invalid option '"option"'"
       Address ISPExec
       'setmsg msg(isrz003)'
       signal done
     end
+    end
+
+  /* --------------------------- *
+   | Capture startup timing info |
+   * --------------------------- */
+   if pos('-T',option) > 0 then do
+      startup = 1
+      s_service = sysvar('SYSSRV')
+      s_time    = sysvar('SYSCPU')
+      s_wtime   = time('s')
+      end
 
   /* ---------------------------------------------------- *
-  | CBT Exec Defaults                                    |
+  | CBT Exec Defaults - override in member CBTCONFG      |
   |                                                      |
   | action = The default action                          |
   |          B ISPF Browse                               |
@@ -355,7 +389,7 @@
   |          V ISPF View                                 |
   |          R Review (CBT File 134)                     |
   |                                                      |
-  | update = 0 for not allowed                           |
+  | update = 0 for not allowed (i.e. Offline mode)       |
   |          1 for allowed                               |
   |                                                      |
   | sysout = a sysout class with Copies(0)               |
@@ -368,7 +402,12 @@
   |                                                      |
   | backup = 0 do NOT create backup files for updates    |
   |        = 1 Create backup files for updated .Dyymmdd  |
+  |                                                      |
+  | access = O Work offline                              |
+  |        = C Use curl if avaiable otherwise FTP        |
+  |        = F Use FTP                                   |
   * ---------------------------------------------------- */
+  access  = 'C'
   action  = 'I'
   backup  = '0'
   sysout  = 'Z'
@@ -379,8 +418,11 @@
   volser  = null
   workunit = null
   smsinfo = null
+  call syscalls 'ON'
 
-ReStart:
+  /* -------------- *
+   | Continue setup |
+   * -------------- */
   if newhlq = null then do
     parse source with . . ddn dsn .
     if dsn = '?' then do
@@ -409,6 +451,16 @@ ReStart:
   | Now process any site customization overrides |
   * -------------------------------------------- */
   call Check_Overrides
+
+  Select
+    When pos('-C',option) > 0 then access = 'C'
+    When pos('-F',option) > 0 then access = 'F'
+    When pos('-N',option) > 0 then access = 'C'
+    When pos('-O',option) > 0 then access = 'O'
+    otherwise nop
+    end
+
+ReStart:
   save_update = update
   if abbrev('NOCHECK',option,1) = 1 then
      update = 0
@@ -470,8 +522,30 @@ Do_Index:
   ms3 = 'This should not take long.'
   call do_popup
 
-  if update = 1 then call check_ftp
-  if update = 1 then ftpstat = 'Enabled'
+  /* ------------------------ *
+   | Get users Home directory |
+   * ------------------------ */
+  user = userid()
+  address syscall ,
+     'getpwnam (user) pw.'
+  home = pw.pw_dir
+
+  if access = 'O' then do
+     update = 0  /* work offline */
+     mode   = ''
+     end
+
+  if update = 1 then call check_curl
+  if curl_ok = 0 then do
+    if update = 1 then call check_ftp
+    if update = 1 then do
+      ftpstat = 'Enabled'
+      mode    = 'FTP'
+    end
+    else mode = ''
+  end
+  else if update = 1
+       then mode = 'Curl'
 
   Address TSO
   cbtindex = "'"cbtidx"("idxmem")'"
@@ -513,18 +587,6 @@ Do_Index:
   'execio * diskr' cbtdd '(finis stem idx.'
   'free f('cbtdd')'
 
-  /* ------------------------------- *
-   | Read in the File043 update date |
-   * ------------------------------- */
-  f43date = "'"cbtidx"(z43date)'"
-  if sysdsn(f43date) = 'OK' then do
-     'alloc f('cbtdd') shr reuse ds('f43date')'
-     'execio * diskr' cbtdd '(finis stem f43.'
-     'free f('cbtdd')'
-      file043_date = strip(f43.1)
-     end
-  else file043_date = 0
-
   Address ISPExec
   call Enable_Rfind
   'tbcreate' cbtdd 'keys(file)' ,
@@ -534,8 +596,12 @@ Do_Index:
   drop idx_file.
 
   update_count = 0
+
   do i = 1 to idx.0
     parse value idx.i with file desc 69 fdate vuflag
+    desc = strip(desc)
+    if special /= 1 then
+    if desc = 'EMPTY' then iterate
     if cbtv = null then cbtv = strip(fdate)
     fupflg = null
     file = strip(file)
@@ -564,6 +630,7 @@ Do_Index:
         end
       end
       else do
+        if online = null then fupflg = '+'
         w = wordpos(file,update_files)
         fdate = word(update_files,w+1)
         if file = 001 then x = check_001_update()
@@ -574,8 +641,6 @@ Do_Index:
       update_count =  update_count + 1
       update_files = update_files file fdate
     end
-    if special /= 1 then
-    if desc = 'EMPTY' then iterate
     'tbadd' cbtdd
   end
 
@@ -602,11 +667,10 @@ Do_Index:
       else online = '*'
       if special /= 1 then
       if desc = 'EMPTY' then iterate
-      update_count =  update_count + 1
       'tbadd' cbtdd
     end
-    'tbsort' cbtdd 'fields(file,n,a)'
   end
+  'tbsort' cbtdd 'fields(file,n,a)'
   if write_index = 1 then do
     Address TSO
     "alloc f("cbtdd") shr reuse ds('"cbtidx"("idxmem")')"
@@ -658,6 +722,7 @@ Do_Index:
         'members. Your current version is:' cbtover file043_msg
       'setmsg msg(isrz003)'
     end
+    if zerrsm = null then
     if cbtover = cbtver then
     if update_count > 0 then do
       zerrsm = 'Updates.'
@@ -692,6 +757,23 @@ Do_Index:
   if cbtver = null
      then cbtver = cbtover
 
+  /* --------------------------- *
+   | Report timing if on startup |
+   * --------------------------- */
+  if pos('-T',option) > 0 then
+  if startup = 1 then do
+    e_service = sysvar('SYSSRV')
+    e_time    = sysvar('SYSCPU')
+    e_wtime   = time('s')
+    total_service = e_service - s_service
+    total_time    = e_time    - s_time
+    total_wtime   = e_wtime   - s_wtime
+    pmsg = 'Startup timing - service:' total_service,
+           'CPU seconds:' total_time 'Wall seconds:' total_wtime
+    startup = 0
+  end
+  else pmsg = null
+
   do forever
     cbtrfind = 'PASSTHRU'
     ftptype = null
@@ -708,6 +790,7 @@ Do_Index:
       trc = rc
       cbtrfind = null
       find_csr = null
+      pmsg = null
       'vput (cbtrfind)'
       if trc > 4 then call done
       ctop = ztdtop
@@ -748,7 +831,7 @@ Done:
   | Bypass if FILE001 has been updated or a REBuild during this    |
   | session.                                                       |
   * -------------------------------------------------------------- */
-Get_CBT_File_Info: Procedure expose cbthlq file_pfx inp. null ,
+Get_CBT_File_Info: Procedure expose cbthlq file_pfx inp. null idx. ,
                    rebuild_cbt rebuild_cov update_cbt update_cov
   cbt_file001 = cbthlq"."file_pfx"001.DATA"
   if file_pfx = 'COV'
@@ -802,7 +885,7 @@ Check_001_Update:
   cfile = "'"cbthlq"."file_pfx"001.DATA'"
   x = listdsi(cfile)
   fd = date('o',substr(syscreate,3,2)''right(syscreate,3),'j')
-  if fd > ud then do
+  if fd >= ud then do
      fupflg = null
      return 0
      end
@@ -812,6 +895,7 @@ Check_001_Update:
    drc = rc
    'Rempop'
    call pfshow 'reset'         /* restore pfshow setting */
+   if drc > 3 then return 0
   x = ftp_from_cbt(file)
   if pos('COV',file_pfx) = 0
      then update_cbt = 1
@@ -819,12 +903,51 @@ Check_001_Update:
   fupflg = null
   return 0
 
+  /* ------------------------------------------------------------ *
+   | Check if curl is available                                   |
+   | - if the NOCURL DD is allocated then the answer is always NO |
+   * ------------------------------------------------------------ */
+Check_Curl:
+  if access = 'F' then do
+     curl_ok = 0
+     return
+     end
+  x = listdsi('NOCURL' 'FILE')
+  if sysreason = 3 then do
+     curl_ok = 0
+     return
+     end
+  cmd = 'command -v curl'
+  x = do_command(cmd)
+  x = g.0
+  if pos('/curl',g.x) = 0
+     then curl_ok = 0
+     else curl_ok = 1
+  /* ---------------------------- *
+   | Now verify curl connectivity |
+   * ---------------------------- */
+    curlcmd = 'curl -I https://cbttape.org'
+    x = do_command(curlcmd)
+    if x = 6 then do
+    curl_ok = 0
+    update = 0
+    ftpstat = 'Disabled'
+    zerrsm = 'Warning.'
+    zerrlm = 'Curl to www.cbttape.org is not working. This may be a' ,
+      'problem with your local system or the site may be down.' ,
+      'Downloads are being disabled for this session. If this is permanent' ,
+      'then change the CBTCONFG to update = 0.'
+    'Setmsg msg(isrz003)'
+    end
+    return
+
   /* ---------------------- *
   | Verify that we can ftp |
   * ---------------------- */
 Check_ftp:
+  if curl_ok = 1 then return
   cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
-  call Write_Command_File 'CHECK'
+  x = Generate_Command('CHECK')
   cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file
   x = do_command(cmd)
   do cfi = 1 to g.0
@@ -854,6 +977,8 @@ Check_Overrides:
     do i = 1 to ovr.0
       if left(ovr.i,1) = '*' then iterate
       Select
+        When translate(word(ovr.i,1)) = 'ACCESS' then
+          access = translate(word(ovr.i,3))
         When translate(word(ovr.i,1)) = 'ACTION' then
           action = translate(word(ovr.i,3))
         When translate(word(ovr.i,1)) = 'PDS' then
@@ -910,7 +1035,7 @@ Do_Select:
     dsn = get_file()
     if dsn = 0 & update = 0 then do
       zerrsm = 'Not Available.'
-      zerrlm = 'File' file 'is not available and FTP is not enabled.'
+      zerrlm = 'File' file 'is not available and Download is not enabled.'
       'setmsg msg(isrz003)'
       csel = null
       return 4
@@ -957,6 +1082,7 @@ Do_Select:
         fp = wordpos(file,update_files)
         if fp > 0 then
         update_files = delword(update_files,fp,2)
+        fupflg = null
         if csels = 1 then do
           zerrsm = 'Updated.'
           zerrlm = 'The requested file(s) has been updated with a clean' ,
@@ -1121,7 +1247,7 @@ Do_ZCMD:
     end
     When abbrev('SEARCH',translate(word(zcmd,1)),1) = 1 then
     call do_search
-    When abbrev('LOCAL',translate(word(zcmd,1)),2) = 1 then
+    When word(zcmd,1) = 'LOCAL' then
     call Do_Local
     When abbrev('ONLINE',translate(word(zcmd,1)),4) = 1 then
     call Do_Local
@@ -1266,7 +1392,7 @@ Get_DSN:
   x = get_file()
   if x = 0 then do
     if sysvar('SYSISPF') /= 'ACTIVE' then return
-    if wordpos(file,updated_files) > 0 then do
+    if wordpos(file,save_update_files) > 0 then do
        ftptype = 'UPDATE'
        fupflg = '+'
        end
@@ -1676,7 +1802,7 @@ FTP_DSN:
     address tso
     if drc > 0 then do
       zerrsm = 'Canceled.'
-      zerrlm = 'File FTP request canceled.'
+      zerrlm = 'File Download request canceled.'
       address ispexec 'Setmsg msg(isrz003)'
       return 4
     end
@@ -1695,7 +1821,6 @@ FTP_DSN:
   if wordpos(file,update_files) > 0 then do
     Address TSO
     "alloc f("cbtdd") shr reuse ds('"cbtidx"("idxmem")')"
-    drop idx.
     'execio * diskr' cbtdd '(finis stem idx.'
     do mi = 1 to idx.0
       if file = word(idx.mi,1) then do
@@ -1727,8 +1852,9 @@ FTP_DSN:
   * ---------------------------------------------------- */
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx fupflg fdate update_files workunit cbtidx smsinfo ,
-    rebuild_cbt rebuild_cov update_cbt update_cov download
+    zip_pfx fupflg fdate update_files workunit cbtidx smsinfo idx. ,
+    rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok env.
+
   arg file
 
   if update = 0 then return 4
@@ -1738,9 +1864,9 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   cbt_hlq   = cbthlq
 
   cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
-  cmd = 'cd /tmp && ls -la unzip'
-  x = do_command(cmd)
-  if pos('not found',e.1) > 0 then do
+  zipfile = '/tmp/unzip'
+  Address syscall 'stat (zipfile) unzips.'
+  if unzips.0 = 0 then do
     cmd = 'cd /tmp ; cp -B "'unzip_dsn'" unzip.pax; pax -rvf unzip.pax' ,
       '&& chmod +x unzip ; rm unzip.pax ; ls -laT /tmp/unzip'
     x = do_command(cmd)
@@ -1768,7 +1894,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   get_file = zip_pfx''file'.zip'
 
   Address ISPExec
-  ms1 = 'Initiating FTP from WWW.CBTTAPE.ORG'
+  ms1 = 'Initiating Download from WWW.CBTTAPE.org'
   ms2 = 'for file:' get_file
   if left(fdate,1) /= 'V' then
   if fupflg /= null
@@ -1777,13 +1903,15 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   call do_popup
   Address TSO
 
-  cmd = 'cd /tmp/  && rm 'get_file
-  x = do_command(cmd)
+  rm_file = '/tmp/'get_file
+  address syscall 'unlink (rm_file)'
 
-  call Write_Command_File 'FTP'
+  x = Generate_Command('FTP')
 
-  cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file ,
-    '&& unzip -o' get_file '&& ls -la' get_file
+  if curl_ok = 0
+     then cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file ,
+                '&& unzip -o' get_file '&& ls -la' get_file
+     else cmd = 'cd /tmp/ && unzip -o' get_file
   x = do_command(cmd)
 
   archive = null
@@ -1795,8 +1923,10 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     end
   end
 
-  cmd = 'cd /tmp/ && rm' cmd_file '&& rm' get_file
-  x = do_command(cmd)
+  rm_file = '/tmp/'get_file
+  address syscall 'unlink (rm_file)'
+  rm_file = '/tmp/'cmd_file
+  address syscall 'unlink (rm_file)'
 
   if archive = null then do
     zerrsm = 'Not Found.'
@@ -1804,10 +1934,10 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     Address ISPExec 'setmsg msg(isrz003)'
     return 0
   end
-
   cmd = 'cd /tmp/ && ls -la' archive
   x = do_command(cmd)
-  space = (word(g.1,5)%50000 + 1) * 2
+  lr = g.0
+  space = (word(g.lr,5)%50000 + 1) * 2
   w = translate(archive,' ','.')
   w = word(w,words(w))
   if w = 'EBC' then w = 'DATA'
@@ -1944,20 +2074,57 @@ Do_Command:
   return x
 
 Get_Env:
-  x = bpxwunix('pwd',,g.,e.)
-  home = strip(g.1)
-  x = bpxwunix('env',,env.,e.)
-  x = env.0 + 1
-  env.x = 'HOME='home
-  env.0 = x
-  drop e.
+  genv.0 = 2
+  genv.1 = 'HOME='home
+  genv.2 = '_BPX_SHAREAS=YES'
+  x = bpxwunix('env',,tenv.,e.,genv.,1)
+  /* ------------------------- *
+   | Remove all logon messages |
+   * ------------------------- */
+  ec = 0
+  do i = 1 to tenv.0
+     if pos('=',tenv.i) = 0 then iterate
+     ec = ec + 1
+     env.ec = tenv.i
+     end
+  env.0 = ec
+  drop e. genv. tenv.
   return
 
   /* ----------------------------------------- *
   | Write the command file out in OMVS format |
+  | unless curl is available ................ |
   * ----------------------------------------- */
-Write_Command_File:
+Generate_Command:
   arg wcf_opt
+  ftpc = 0
+  if curl_ok = 0 then call setup_ftp
+  if wcf_opt = 'FTP' then call setup_ftp_file
+  if wcf_opt = 'UPDATE' then call setup_ftp_update
+  if curl_ok = 1 then return 1
+  call add_ftp 'quit'
+  ftp.0 = ftpc
+
+  /* ---------------------------------- *
+  | Write the commands to omvs for use |
+  * ---------------------------------- */
+  Address syscall "writefile (cmd_file) 777 ftp."
+  drop ftp.
+  return 1
+
+  /* ------------------------------- *
+  | Add ftp command to command file |
+  * ------------------------------- */
+add_ftp:
+  parse arg ftp_opt
+  ftpc = ftpc + 1
+  ftp.ftpc = ftp_opt
+  return
+
+  /* -------------------- *
+   | Setup the FTP access |
+   * -------------------- */
+Setup_FTP:
   drop ftp.
   ftpc = 0
   call add_ftp 'anonymous'
@@ -1966,8 +2133,33 @@ Write_Command_File:
   call add_ftp 'bin'
   call add_ftp 'locsite fwfriendly'
   call add_ftp 'cd pub'
-  if wcf_opt = 'FTP'
-  then do
+  return
+
+  /* ------------------------ *
+   | Setup the File retrieval |
+   * ------------------------ */
+Setup_FTP_File:
+  if curl_ok = 1 then do
+    if file_pfx = 'FILE' then do
+      filepref = 'CBT'
+      if fupflg /= '+'
+      then filefdir = 'cbt'
+      else filefdir = 'updates'
+      fileudir = 'updates'
+    end
+    else do
+      filepref = 'COV'
+      if ftptype = null
+      then filefdir = 'cov'
+      else filefdir = 'updatcov'
+      fileudir = 'updatcov'
+    end
+    curlcmd = 'cd /tmp/ &&' ,
+              'curl -s -O' ,
+       'https://cbttape.org/ftp/'filefdir'/'filepref''file'.zip'
+    x = do_command(curlcmd)
+  end
+  else do
     if file_pfx = 'FILE' then do
       if fupflg /= '+'
       then call add_ftp 'cd cbt'
@@ -1980,9 +2172,16 @@ Write_Command_File:
     end
     call add_ftp 'get' get_file
   end
-  if wcf_opt = 'UPDATE' then do
+  Return
+
+  /* --------------------- *
+   | Define update process |
+   * --------------------- */
+Setup_FTP_Update:
+  if curl_ok = 0 then do
     if ftptype = null then do
       if file_pfx = 'FILE' then do
+        cbtpfx = 'CBT'
         call add_ftp 'cd cbt'
         call add_ftp 'get $$$$$$$$ (replace'
         call add_ftp 'cd ..'
@@ -1991,30 +2190,97 @@ Write_Command_File:
         call add_ftp 'get UPDATESTOC.txt' userid()'_toc  (replace'
       end
       else do
+        cbtpfx = 'COV'
         call add_ftp 'cd updatcov'
         call add_ftp 'dir COV*.zip'
         call add_ftp 'get UPDTCOVTOC.txt' userid()'_toc  (replace'
       end
     end
   end
-  call add_ftp 'quit'
-  ftp.0 = ftpc
+  else do
+    if ftptype = null then do
+      if file_pfx = 'FILE' then do
+        cbtpfx = 'CBT'
+        curlcmd = 'curl -s https://cbttape.org/ftp/cbt/\$\$\$\$\$\$\$\$' ,
+                  ' https://cbttape.org/ftp/updates/UPDATESTOC.txt'
+      end
+      else do
+        cbtpfx = 'COV'
+        curlcmd = 'curl -s https://cbttape.org/ftp/updatcov/UPDTCOVTOC.txt'
+      end
+      x = do_command(curlcmd)
+      x = process_update_txt()
+    end
+  end
+  Return
 
-  /* ---------------------------------- *
-  | Write the commands to omvs for use |
-  * ---------------------------------- */
-  Address syscall "writefile (cmd_file) 777 ftp."
-  drop ftp.
-  return
+Process_Update_Txt:
+  cc = 0
+  cbtfiles. = null
+  cbtfiles.0 = 0
+  drop toc.
+  tc = 0
+  if file_pfx = 'FILE'
+     then fileudir = 'updates'
+     else fileudir = 'updatcov'
+  do ig = 1 to g.0
+    if left(g.ig,4) = '//*+' then do
+       tc = tc + 1
+       toc.tc = g.ig
+       end
+    else iterate
+    if file_pfx /= 'COV' then
+    if left(g.ig,10) = '//*VERSION' then do
+       cbtver = word(g.ig,2)
+       end
+    if left(g.ig,5) = '//*+F' then do
+      if pos('*# ',g.ig) = 0 then iterate
+      cc = cc + 1
+      cbtfiles.cc = strip(substr(g.ig,9,4))
+      cbtfiles.0 = cc
+    end
+  end
+  toc.0 = tc
 
-  /* ------------------------------- *
-  | Add ftp command to command file |
-  * ------------------------------- */
-add_ftp:
-  parse arg ftp_opt
-  ftpc = ftpc + 1
-  ftp.ftpc = ftp_opt
-  return
+  drop g. cc
+  curlcmd = null
+  curlcont = null
+  do ic = 1 to cbtfiles.0
+    f = word(cbtfiles.ic,1)
+    curlcmd = curlcmd curlcont ,
+      'curl -s -I https://cbttape.org/ftp/'fileudir'/'cbtpfx''f'.zip'
+    curlcont = '&&'
+  end
+  x = do_command(curlcmd)
+
+  hit = 0
+  ug = 0
+  fc = 0
+  drop gtmp.
+  gtmp.0 = 0
+  do ic = 1 to g.0
+    if left(g.ic,4) = 'HTTP' then do
+      fc = fc + 1
+      if pos('404',g.ic) > 0 then iterate
+      hit = 1
+    end
+    if left(g.ic,5) = 'Last-' then do
+      hit = 0
+      ug = ug + 1
+      dt = left(word(g.ic,6),5)
+      if pos(':',dt) = 0
+      then dt = left(dt,4)
+      gtmp.ug = 'x1 x2 x3 x4 x5' word(g.ic,4) word(g.ic,3) dt ,
+        cbtpfx''word(cbtfiles.fc,1)'.zip'
+      gtmp.0 = ug
+    end
+  end
+  drop g.
+  do ig = 0 to gtmp.0
+     g.ig = gtmp.ig
+     end
+  Return 0
+
 
   /* -------------------------------- *
   | Switch to the CBT Overflow files |
@@ -2112,26 +2378,28 @@ Do_Update:
 
   if update = 0 then return
 
-  cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
+  address syscall 'unlink (cmd_file)'
 
-  cmd = 'cd /tmp/  && rm 'cmd_file
-  x = do_command(cmd)
+  x = Generate_Command('UPDATE')
 
-  call Write_Command_File 'UPDATE'
-
+  if curl_ok = 0 then do
   cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file ,
     '&& rm' cmd_file
   x = do_command(cmd)
+  end
 
   /* ------------------------------------------------------- *
   | Read in the $$$$$$$$ file which contains the CBT Tape   |
   | version. Then delete it (since the file has $ they must |
   | be escaped with a \.                                    |
   * ------------------------------------------------------- */
-  address syscall 'readfile /tmp/$$$$$$$$' 'so.'
-  x = bpxwunix('rm /tmp/\$\$\$\$\$\$\$\$',,o.,e.)
-  parse value so.3 with '//*VERSION' cbtver .
-  cbtver = strip(cbtver)
+  if curl_ok = 0 then do
+     address syscall 'readfile /tmp/$$$$$$$$' 'so.'
+     rm_file = '/tmp/$$$$$$$$'
+     address syscall 'unlink (rm_file)'
+     parse value so.3 with '//*VERSION' cbtver .
+     cbtver = strip(cbtver)
+     end
 
   /* ------------------------------------------------------ *
   | Check to see if the cbtver is newer than the last      |
@@ -2152,7 +2420,6 @@ Do_Update:
     'free f('cbtdd')'
   end
   Address ISPExec
-
 
   if update_files = null then do
     updates.0 = null
@@ -2179,15 +2446,47 @@ Do_Update:
       update_files = update_files file udate
     end
 
-    updated_files = update_files
-
+  save_update_files = update_files
+  updated_files = update_files
+  if curl_ok = 0 then do
     toc = userid()'_toc'
-    cmd = 'cat /tmp/'toc '&& rm /tmp/'toc
-    x = do_command(cmd)
+    toc_file = '/tmp/'toc
+    address syscall 'readfile (toc_file) toc.'
+    address syscall 'unlink (toc_file)'  /* unlink = delete */
+  end
 
-    do gi = 1 to g.0
-      parse value g.gi with 9 file':' 15 desc 69 .
+  if datatype(toc.0) /= 'NUM' then do
+     zerrsm = 'Warning.'
+     zerrlm = 'www.cbttape.org access is unavailable at this time.' ,
+              'Please try again later.'
+     'Setmsg msg(isrz003)'
+     return 0
+     end
+
+  Address TSO
+  "alloc f("cbtdd") shr reuse ds("cbtindex")"
+  drop idx.
+  'execio * diskr' cbtdd '(finis stem idx.'
+  'free f('cbtdd')'
+  Address ISPExec
+
+   index_update = 0
+   index. = null
+   do ii = 1 to idx.0
+      ifile = word(idx.ii,1)
+      index.ifile = idx.ii
+      end
+
+    do gi = 1 to toc.0
+      if length(toc.gi) < 10 then iterate
+      parse value toc.gi with 9 file':' 15 desc 69 .
       file = strip(file)
+      if index.file = null then do
+         idxc = idx.0 + 1
+         idx.idxc = left(left(file,4) strip(desc),69) 'V'cbtver '#'
+         idx.0 = idx.0 + 1
+         index_update = 1
+         end
       if right(desc,2) = ' *' then
       desc = strip(substr(desc,1,length(desc)-2))
       if right(desc,1) = '*' then
@@ -2196,8 +2495,12 @@ Do_Update:
     end
   end
 
-  if check_update = 1 then return
+  if index_update = 1 then do
+     x = Update_Index(1)
+     x = Update_Index_Stats()
+     end
 
+  if check_update = 1 then return
   updates = update_count
   if update_opt = null then do
      call pfshow 'off'
@@ -2235,7 +2538,7 @@ Do_Update:
      uf = word(download,xi)
      up = wordpos(uf,updated_files)
      updated_files = delword(updated_files,up,2)
-     update_count = update_count -1
+     update_count = update_count - 1
      end
 
   ftptype = null
@@ -2260,6 +2563,7 @@ Do_Update:
   | Now update the Index with the updated files |
   * ------------------------------------------- */
 Update_Index:
+  arg UI_Opt
   idc = 0
   drop ido.
   do ui = 1 to idx.0
@@ -2277,16 +2581,19 @@ Update_Index:
     ido.idc = left(left(file,4) left(desc,55),70) dt
     ido.0 = idc
   end
+
   env.0 = 1
   env.1='LC_COLLATE=S370'
-  call bpxwunix 'sort -k 1 -k 2',ido.,idx.,msg.,env.
+  call bpxwunix 'sort -k.1,1.4n',ido.,idx.,msg.,env.
+
   Address TSO
   "alloc f("cbtdd") shr reuse ds('"cbtidx"("idxmem")')"
   'execio * diskw' cbtdd '(finis stem idx.'
   'free f('cbtdd')'
-
   Address ISPExec
+
   call update_index_stats
+  if ui_opt /= null then return 0
   wd = date('s')
   wt = time()
   parse value wt with wh':'wm':'
@@ -2320,6 +2627,7 @@ Update_Filennn:
      else mem = '@FIL'file
   input = "'"cbthlq"."file_pfx""file".PDS("mem")'"
   output = "'"cbtidx"("file_pfx""file")'"
+  dsn = file_pfx''file'.PDS'
   x = listdsi("'"dsn"'")
   Select
     When x > 4 then return 4
@@ -2782,8 +3090,11 @@ DropISPF: Procedure
   end
   return 0
 
+/* Comment Start
 Get_Dataset_List: Procedure Expose cbthlq cbt_online null ,
     zerrhm zerralrm zerrtp file_pfx idxmem zip_pfx
+   Comment End */
+Get_Dataset_List:
   listit = cbthlq
   if right(listit,3) /= '.**' then listit = listit'.**'
   call outtrap 't.'
@@ -2798,40 +3109,6 @@ Get_Dataset_List: Procedure Expose cbthlq cbt_online null ,
     cbt_online = cbt_online file
   end
   return
-
-  /* --------------------  rexx procedure  -------------------- *
-  | Name:      SortStr                                         |
-  |                                                            |
-  | Function:  Sorts the provided string and returns it        |
-  |                                                            |
-  | Syntax:    string = sortstr(string)                        |
-  |                                                            |
-  | Usage:     Pass any string to SORTSTR and it will return   |
-  |            the string sorted                               |
-  |                                                            |
-  | Author:    Lionel B. Dyck                                  |
-  |                                                            |
-  | History:  (most recent on top)                             |
-  |            10/13/20 - Eliminate extra blank on last entry  |
-  |            09/19/17 - Creation                             |
-  |                                                            |
-  * ---------------------------------------------------------- */
-SortSTR: Procedure
-  parse arg string
-  do imx = 1 to words(string)-1
-    do im = 1 to words(string)
-      w1 = word(string,im)
-      w2 = word(string,im+1)
-      if w1 > w2 then do
-        if im > 1
-        then  lm = subword(string,1,im-1)
-        else lm = ''
-        rm = subword(string,im+2)
-        string = lm strip(w2 w1) rm
-      end
-    end
-  end
-  return strip(string)
 
 REXXCSI:
   /* REXX */
@@ -3194,15 +3471,15 @@ BLDIndex:
     Address TSO
     return
 
-  Update_Index_Stats:
+Update_Index_Stats:
     "LMINIT DATAID(statidx) DATASET('"cbtidx"') ENQ(SHR)"
     "LMOPEN DATAID("statidx") OPTION(INPUT)"
     'LMMSTATS DATAID('statidx') MEMBER('idxmem')'
     "LMClose Dataid("statidx")"
     "LMFree  Dataid("statidx")"
-    Return
+    Return 0
 
-  Get_Index_Stats:
+Get_Index_Stats:
     "LMINIT DATAID(statid) DATASET('"cbtidx"')"
     "LMOPEN DATAID("statid") OPTION(INPUT)"
     "LMMFIND Dataid("statid") MEMBER("idxmem")" ,
@@ -3211,7 +3488,7 @@ BLDIndex:
     "LMFree  Dataid("statid")"
     return
 
-  Do_File_Pop:
+Do_File_Pop:
     if file//25 /= 0 then return
     Address ISPExec
     ms1 = null
@@ -3239,16 +3516,16 @@ BLDIndex:
  @ type(output) intens(low) color(green)
  ! type(output) intens(low) color(white) caps(off)
  { type(output) intens(low) color(white) hilite(uscore)
- ] type(output) intens(low) color(turq ) skip(on)
+ ] type(output) intens(low) color(turq ) skip(on) caps(off)
  [ type(output) intens(high)
  # type(text)               color(turq)
  _ type(input ) hilite(uscore)
  $ type(input ) hilite(uscore) caps(on)
  ~ type(ps)
 )Body Expand(\\)
-%CBTTape®!ver %     The!title   %CBT{cver%ISPF Dialog
+%CBTTape®!pver      %!title   %CBT{cver%ISPF Dialog
 +Command ===>_zcmd         \ \ +Scroll ===>_cscr+
-+                             \ \~Exit+
+]pmsg                         \ \~Exit+
 +S ~File+ Description                                               ~Date+
 )Model
 $z+]file @desc                                                  ]z[z@fdate
@@ -3256,8 +3533,11 @@ $z+]file @desc                                                  ]z[z@fdate
  .help = cbth
  .zvars = '(csel fupflg online)'
  &cscr = 'CSR'
-*REXX(* cbtver cver)
+*REXX(* cbtver cver pver mode ver)
  cver = 'V'cbtver
+ if mode /= ''
+    then pver = ver'('mode')'
+    else pver = ver
 *EndRexx
 )Proc
  IF (&ZCMD = &Z)
@@ -3293,8 +3573,8 @@ $z+]file @desc                                                  ]z[z@fdate
 +the]CBTTAPE®+'tape', updates, and overflow, directly from your z/OS
 +TSO/ISPF session.
 +
-+If FTP is available, then ALL of the]CBTTAPE®+files are available to be
-+downloaded on demand (when you want to check them out). If FTP is not
++If download is available, then ALL of the]CBTTAPE®+files are available to be
++downloaded on demand (when you want to check them out). If download is not
 +available, then each individual file will need to be downloaded and made
 +available on z/OS for this dialog to work.
 +
@@ -3331,8 +3611,8 @@ $z+]file @desc                                                  ]z[z@fdate
 `Command ===>_zcmd
 `
 %Notes:`If the CBT file does not exist locally (no%*`on the right) you will
-`be prompted to install it using FTP. If a file has an update available then
-`a%+`on the right, along with update date.
+`be prompted to install it using download. If a file has an update available
+`then a%+`on the right, along with update date.
 `
 `To download a single file, select it using any line command (except I or S).
 `If an update is available for the file then it will be downloaded.
@@ -3371,7 +3651,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %History+ Display a change history for the command         (e.g. H)
 +  %Info+    Display CBT Application Summary Information      (e.g. I)
 +            - View the FILEnnnn member in the Index PDS
-+  %LOcal+   Display only local files                         (e.g. LO)
++  %LOCAL+   Display only local files                         (e.g. LOCAL)
 +            - under hlq[cbthlq2
 +  %Locate+  Locates the row with the requested file number   (e.g. L 2)
 +            - leading zero's not required
@@ -3413,7 +3693,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-                   +Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH1
  &zcont = CBTH2
@@ -3444,7 +3724,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH1
  &zcont = CBTH3
@@ -3476,7 +3756,7 @@ $z+]file @desc                                                  ]z[z@fdate
 [              was updated with the current 'tape' version
 [
 [
-[Press%Enter[to continue with the Tutorial
+                  [Press%Enter[to continue with the Tutorial
 )Init
  &zup = CBTH3
  &zcont = CBTH5
@@ -3491,24 +3771,24 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +The CBT Command has the following startup options:
 +
-      %CBT option \ althlq
+      %CBT option(s) \ althlq
 +
-+Where:    %option+  %O+to process the CBT Overflow Files
-+                    %C+to process the CBT Files (default)
-+                    %N+to bypass checking for updates at startup
-+                       use%Refresh Check+or%R C+to check.
++   options:  -C   use curl for access
++             -F   use ftp for access
++             -O   offline access
++             -T   show startup timing
 +
-+          %althlq+  Is the HLQ for the desired FILEIDX.PDS dataset to use
-+                    instead of the default dataset.
++   %althlq+  Is the HLQ for the desired FILEIDX.PDS dataset to use
++             instead of the default dataset.
 +
-+
-+
-+
++Sample use:  %CBT -C -T
 +
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
++
++
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH4
  &zcont = CBTH6
@@ -3529,18 +3809,18 @@ $z+]file @desc                                                  ]z[z@fdate
 +that it works with refreshed, along with all of the FILEnnnn members in the
 +hlq.FILEIDX.PDS.
 +
-+The process is simple:  1. Update the%U+(update) action on FILE001 to update
-+                           your local copy of FILE001.
-+                           - if you don't have FTP ability then manually do it
-+                        2. Invoke the%REBUILD+command
-+                        3. Note that ALL files that were updated with the
-+                           refresh will be identified with the update flag,
-+                           and the date field will have the CBT version number.
++The process is simple:
++1. Update the%U+(update) action on FILE001 to update
++   your local copy of FILE001.
++   - if you don't have download ability then manually do it
++2. Invoke the%REBUILD+command
++3. Note that ALL files that were updated with the
++   refresh will be identified with the update flag,
++   and the date field will have the CBT version number.
 +
 +
 +
-+
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH5
  &zcont = CBTH7
@@ -3560,13 +3840,21 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %Canceled.     +
 +     Rebuild canceled.
 +  %Canceled.     +
-+     File FTP request canceled.
++     File download request canceled.
 +  %Canceled.     +
 +     CBTTape® Update request canceled.
 +  %Canceled.     +
 +     Copy canceled.
++  %Canceled.
++     Update canceled.
 +  %Copied.       +
 +     DSN has been copied to NEWDSN.
++  %Disabled.
++     FTP disabled.
++  %Downloads.
++     nnnn Files downloaded.
++  %Enabled.
++     FTP enabled.
 +  %Error.        +
 +     Sort requires a column name (File or Date), with
 +     an optional direction (A or D).
@@ -3583,6 +3871,13 @@ $z+]file @desc                                                  ]z[z@fdate
 +     either missing or corrupt.
 +  %Error.        +
 +     Copy From and To may not be the same dataset name.
++  %Error.
++     Unable to build the CBT Index as Hlq.CBT001.DATA is
++     not available and FTP is not enabled.
++  %Error.
++     CBT index in Hlq.CBT001.DATA is not built, contact CBT support.
++  %Error.
++     The RECEIVE failed and the input file has been retained: dsn
 +  %Fatal.        +
 +     CBT FILE/COV001.DATA is not available under cbthlq
 +     and was not able to be downloaded via FTP from
@@ -3609,14 +3904,23 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %Invalid.      +
 +     Search requires a search string...
 +  %Invalid.      +
-+      X is an invalid SET value for the default selection action. Try
-+      again using B,E,I,P,R, or V.
++     X is an invalid SET value for the default selection action. Try
++     again using B,E,I,P,R, or V.
++  %Invalid.
++     Sort field of field is not valid - try FILE or DATE.
++  %Invalid.
++     Sort order of direction is not valid - try A or D.
 +  %Missing.      +
 +     Member xxx does not exist for this file.
++  %New CBT Version.
++     CBT Version vvv is now available. You should
++     download FILE001 and then use the REBUILD command to refresh
++     the CBT Index used by this dialog along with all the FILEnnn
++     members. Your current version is:  vvv
 +  %No Update.    +
 +     Update is disabled for this site.
 +  %Not Available.+
-+     File xxx is not available and FTP is not enabled.
++     File xxx is not available and download is not enabled.
 +  %Not Allowed.  +
 +     Update processing is not allowed based on the
 +     customization settings for this site.
@@ -3689,7 +3993,7 @@ $z+]file @desc                                                  ]z[z@fdate
 +
 +
 +
-+Press%Enter+to continue with the Tutorial
+                  +Press%Enter+to continue with the Tutorial
 )Init
  &zup = CBTH7
  &zcont = CBTH
@@ -3744,12 +4048,12 @@ if (&zerrsm EQ &Z)
 +
 +File 001 has been updated on the CBTTape FTP Site.
 +
-+Press%Enter+to use FTP to download this file from cbttape.org
++Press%Enter+to download this file from cbttape.org
 +or%F3+to cancel the download.
 +
 +After the update you should consider doing a%REBuild
 )Init
- &zwinttl = 'CBTTape® FTP File Prompt'
+ &zwinttl = 'CBTTape® Download File Prompt'
 )Proc
 )End
 >Panel CBTPOPUP
@@ -3780,10 +4084,10 @@ if (&zerrsm EQ &Z)
 +
 +File[file+has not been downloaded to this system.
 +
-+Press%Enter+to use FTP to download this file from cbttape.org
++Press%Enter+to download this file from cbttape.org
 +or%F3+to cancel the download.
 )Init
- &zwinttl = 'CBTTape® FTP File Prompt'
+ &zwinttl = 'CBTTape® Download File Prompt'
 )Proc
 )End
 >Panel CBTPOPQR
@@ -3800,7 +4104,7 @@ if (&zerrsm EQ &Z)
 +
 +Press%Enter+to continue with the rebuild or%F3+to cancel.
 )Init
- &zwinttl = 'CBTTape® FTP File Prompt'
+ &zwinttl = 'CBTTape® Download File Prompt'
 )Proc
 )End
 >Panel CBTPOPQU
@@ -3811,7 +4115,7 @@ if (&zerrsm EQ &Z)
 +
 +There are$z  +updates available on the CBTTape® Updates site.
 +
-+Press%Enter+to use FTP to download them to your local system
++Press%Enter+to download them to your local system
 +or%F3+to cancel the download.
 )Init
 .zvars = '(updates)'
@@ -3844,7 +4148,7 @@ $t2      +Index Refresh:@cbtinfo
 +Downloaded Files:      @down
 +Available Updates:     @cbtup
 +Default Select Action: @ispfacts
-+FTP Status:            @ftpstat
++Download Mode:         @modex
 +Create Backups:        @cbtbkup
 +RECEIVE SYSOUT class:  @sysout
 +PDS Command:           @cbtp
@@ -3852,7 +4156,7 @@ $t2      +Index Refresh:@cbtinfo
 +
 )Init
 &zwinttl = 'The Official CBT Dialog Information'
-*Rexx(* t1 t2 title)
+*Rexx(* t1 t2 title modex mode)
  if title = 'Official'
     then do
          t1 = 'CBTINDEX'
@@ -3862,6 +4166,8 @@ $t2      +Index Refresh:@cbtinfo
          t1 = 'COVINDEX'
          t2 = 'COVINDEX'
          end
+ if mode = '' then modex = 'Offline'
+    else modex = mode
 *Endrexx
 )Proc
 )End
@@ -3941,7 +4247,7 @@ $t2      +Index Refresh:@cbtinfo
  &Sort     = 'SOrt   '
  &History  = 'History'
  &Info     = 'Info   '
- &Local    = 'LOcal  '
+ &Local    = 'LOCAL  '
  &Locate   = 'Locate '
  &New      = 'New    '
  &Only     = 'Only   '
@@ -3998,7 +4304,7 @@ if zcmd = ''
  FIELD(REBuild  ) VAR(zcmd) VAL('REBUILD ')
  FIELD(Refresh  ) VAR(zcmd) VAL('REFRESH ')
  FIELD(Search   ) VAR(zcmd) VAL('SEARCH  ')
- FIELD(LOcal    ) VAR(zcmd) VAL('LOCAL   ')
+ FIELD(LOCAL    ) VAR(zcmd) VAL('LOCAL   ')
  FIELD(SORT     ) VAR(zcmd) VAL('SORT    ')
  FIELD(UPDate   ) VAR(zcmd) VAL('UPDATE  ')
  FIELD(CURrent  ) VAR(zcmd) VAL('CURRENT ')

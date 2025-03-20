@@ -15,9 +15,9 @@
 *
 *action = I
 *
-*update = 0 for not allowed - meaning FTP is not enabled
-*         1 for allowed     - meaning that FTP will be attempted and used if
-*                             it tests ok
+*update = 0 for not allowed - meaning FTP and Curl are not enabled
+*         1 for allowed     - meaning that FTP/Curl will be attempted and
+*                             used if it tests ok
 *update = 0
 *
 *sysout = a sysout class with Copies(0)
@@ -40,20 +40,22 @@
 * volser = xxxxxx (volume serial for cbt datasets)
 *          leave commented out to allow SMS to position
 *
-*volser = CBT006
-*
-* smsinfo = SMS class information for the RECEIVE command
-*          leave commented out to allow ACS routines to allocate
-*
-*smsinfo = 'STORCLAS(TSODATA) MGMTCLAS(TSODATA)'
+*volser = CBTREF
 *
 * workunit = xxxxxxxx (unit type for temporary dataset)
-*          do not use VIO as temp datasets are cataloged during lifetime
 *          leave commented out to allow SMS to position
 *
 *workunit = SYSALLDA
 *
+*
 * backup = 0 Do NOT create backup files when a file is updated
 *        = 1 Create .Dyymmdd backup files when a file is updated
 *
-*backup = 1
+backup = 0
+*
+*
+* access = O Work offline
+*        = C Use curl if avaiable otherwise FTP
+*        = F Use FTP
+*
+access = C
