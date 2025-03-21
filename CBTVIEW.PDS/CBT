@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.02'
+  ver = '2.03'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-03-21 LBD 2.03                                  |
+  |                   - Correct update message                |
   |                                                           |
   |      2025-03-20 LBD 2.02                                  |
   |                   - Improve curl failure detection        |
@@ -354,7 +357,8 @@
   parse value '' with null rfind_opt tab_open ftptype pmsg ,
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
     special cbtver ispfact file043_update save_update access startup ,
-    rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok
+    rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok ,
+    zerrsm
 
   arg option '\' newhlq
   if option \= ' ' then
