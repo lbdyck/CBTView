@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.04'
+  ver = '2.05'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,10 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-03-25 LBD 2.05                                  |
+  |                   - Eliminate redundant update of         |
+  |                     @FILnnnn/@FILEnnn member              |
   |                                                           |
   |      2025-03-25 LBD 2.04                                  |
   |                   - Correct @FILExxx @FILxxxx update      |
@@ -1084,7 +1088,6 @@ Do_Select:
         Address TSO "Delete '"dsn"'"
         call outtrap 'off'
         call get_dsn
-        x = update_filennn(file)
         csel = null
         fp = wordpos(file,update_files)
         if fp > 0 then
