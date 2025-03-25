@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.03'
+  ver = '2.04'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-03-25 LBD 2.04                                  |
+  |                   - Correct @FILExxx @FILxxxx update      |
   |                                                           |
   |      2025-03-21 LBD 2.03                                  |
   |                   - Correct update message                |
@@ -2632,7 +2635,7 @@ Update_Filennn:
   input = "'"cbthlq"."file_pfx""file".PDS("mem")'"
   output = "'"cbtidx"("file_pfx""file")'"
   dsn = file_pfx''file'.PDS'
-  x = listdsi("'"dsn"'")
+  x = listdsi(input)
   Select
     When x > 4 then return 4
     When sysdsorg = 'PS' | sysrecfm = 'U' then
