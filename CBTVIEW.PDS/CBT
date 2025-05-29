@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.07'
+  ver = '2.06'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,9 +35,6 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
-  |                                                           |
-  |      2025-05-29 LBD 2.07                                  |
-  |                   - Clean up ftp command file in /tmp     |
   |                                                           |
   |      2025-04-21 LBD 2.06                                  |
   |                   - Correct update count messages         |
