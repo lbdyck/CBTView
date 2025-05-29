@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.05'
+  ver = '2.07'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,12 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-05-29 LBD 2.07                                  |
+  |                   - Clean up ftp command file in /tmp     |
+  |                                                           |
+  |      2025-04-21 LBD 2.06                                  |
+  |                   - Correct update count messages         |
   |                                                           |
   |      2025-03-25 LBD 2.05                                  |
   |                   - Eliminate redundant update of         |
@@ -634,7 +640,6 @@ Do_Index:
         if online = null then fupflg = '+'
         if cdn > cdo then do
           fupflg = '+'
-          update_count = update_count + 1
           fdate = word(update_files,w+1)
           if file = '043' then file043_update = 1
              else file043_update = null
@@ -649,9 +654,11 @@ Do_Index:
     end
     else if vuflag = '#' & online = null then do
       fupflg = '+'
-      update_count =  update_count + 1
       update_files = update_files file fdate
     end
+    if fupflg = '+' then do
+       update_count = update_count + 1
+       end
     'tbadd' cbtdd
   end
 
@@ -961,6 +968,7 @@ Check_ftp:
   x = Generate_Command('CHECK')
   cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file
   x = do_command(cmd)
+  address 'SH' 'rm' cmd_file
   do cfi = 1 to g.0
     if pos('220 ProFTPD Server (ftp.cbttape.org)',g.cfi) > 0 then do
       update = 1
