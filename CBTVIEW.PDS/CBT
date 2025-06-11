@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.06'
+  ver = '2.07'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-06-11 LBD 2.07                                  |
+  |                   - Clean up temp command file            |
   |                                                           |
   |      2025-04-21 LBD 2.06                                  |
   |                   - Correct update count messages         |
@@ -964,8 +967,8 @@ Check_ftp:
   cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
   x = Generate_Command('CHECK')
   cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file
+  cmd = cmd '&& rm' cmd_file
   x = do_command(cmd)
-  address 'SH' 'rm' cmd_file
   do cfi = 1 to g.0
     if pos('220 ProFTPD Server (ftp.cbttape.org)',g.cfi) > 0 then do
       update = 1
