@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.08'
+  ver = '2.09'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-07-09 LBD 2.09                                  |
+  |                   - allow .DATA within an XMIT file       |
   |                                                           |
   |      2025-07-09 LBD 2.08                                  |
   |                   - fix clean up again                    |
@@ -2009,6 +2012,11 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
 
     'NewStack'
 
+    if right(newdsn,5) = '.DATA' then do
+       l = length(zospds) - 4
+       zospds = left(zospds,l)'.DATA'
+       end
+
     if volser /= null
     then cbtvol = 'volume('volser')'
     else cbtvol = null
@@ -2044,17 +2052,22 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
   /* ---------------------------------------- *
    | Get the recommended BLKSIZE for the File |
    * ---------------------------------------- */
-Get_New_BLKSize: Procedure
+Get_New_BLKSize: Procedure expose newdsn
   arg zos
   call outtrap 'xi.'
   x = xmitinfo(zos)
   call outtrap 'off'
   new_blksize = 0
   do i = xi.0 to 1 by -1
-     if left(strip(xi.i),5) = 'DSORG' then leave
-     end
-  parse value xi.i with 'DSORG='dsorg 'LRECL='lrecl 'BLKSIZE='blksize ,
+     xi.i = strip(xi.i)
+     if left(xi.i,5) = 'File:' then do
+        parse value xi.i with . 'DSN='newdsn .
+        leave
+        end
+     if left(xi.i,5) = 'DSORG' then
+         parse value xi.i with 'DSORG='dsorg 'LRECL='lrecl 'BLKSIZE='blksize ,
         'RECFM='recfm
+     end
   Select
      When left(recfm,1) = 'U' then return 32760 recfm
      When left(recfm,1) = 'V' then return 32760 recfm
@@ -2064,6 +2077,7 @@ Get_New_BLKSize: Procedure
           end
      Otherwise return 0 recfm
      end
+return
 
   /* ----------------------------------------------------------------- *
   | Rename the existing dataset with it's creation date               |
