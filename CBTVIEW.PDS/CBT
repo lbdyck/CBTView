@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.07'
+  ver = '2.08'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-07-09 LBD 2.08                                  |
+  |                   - fix clean up again                    |
   |                                                           |
   |      2025-06-11 LBD 2.07                                  |
   |                   - Clean up temp command file            |
@@ -1943,7 +1946,7 @@ FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
 
   rm_file = '/tmp/'get_file
   address syscall 'unlink (rm_file)'
-  rm_file = '/tmp/'cmd_file
+  rm_file = cmd_file
   address syscall 'unlink (rm_file)'
 
   if archive = null then do
