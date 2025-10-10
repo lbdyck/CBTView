@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.09'
+  ver = '2.10'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,12 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-10-10 LBD 2.10                                  |
+  |                   - add TBD command to show files not     |
+  |                     downloaded                            |
+  |                   - Add completion messages for LOCAL and |
+  |                     TBD                                   |
   |                                                           |
   |      2025-07-09 LBD 2.09                                  |
   |                   - allow .DATA within an XMIT file       |
@@ -1273,6 +1279,8 @@ Do_ZCMD:
     call do_search
     When word(zcmd,1) = 'LOCAL' then
     call Do_Local
+    When word(zcmd,1) = 'TBD' then
+    call Do_TBD
     When abbrev('ONLINE',translate(word(zcmd,1)),4) = 1 then
     call Do_Local
     When abbrev('SITE',translate(word(zcmd,1)),2) = 1 then
@@ -1621,6 +1629,26 @@ Do_Local:
     if online = null then 'tbdelete' cbtdd
   end
   'tbtop' cbtdd
+  zerrsm = 'Local.'
+  zerrlm = 'Only files that have been downloaded are in the display.'
+  'setmsg msg(isrz003)'
+  return
+
+  /* -------------------------------- *
+   | Display only files that have not |
+   | been downloaded.                 |
+   * -------------------------------- */
+Do_TBD:
+  'tbtop' cbtdd
+  do forever
+    'tbskip' cbtdd
+    if rc > 0 then leave
+    if online /= null then 'tbdelete' cbtdd
+  end
+  'tbtop' cbtdd
+  zerrsm = 'TBD.'
+  zerrlm = 'Only files that have NOT been downloaded are in the display.'
+  'setmsg msg(isrz003)'
   return
 
   /* ----------------------------------- *
@@ -3719,13 +3747,13 @@ $z+]file @desc                                                  ]z[z@fdate
 +  %SET+     Set the default Select Action (BEIPRV)           (e.g. SET B)
 +  %SOrt+    Sort File/Date A/D                               (e.g. SO F A)
 +            - abbreviations File (F) and Date (D)
++  %TBD+     Display files To Be Downloaded                   (e.g. TBD)
 +  %UPDate+  Check and Download all Updated CBT files since   (e.g. UPD)
 +            the last Update
 +            - Also updates the individual FILEnnn members
 +  %CUrrent+ Switch to the Current CBT Files   (see Flip)     (e.g. CU)
 +  %OVerflow+Switch to the Overflow CBT Files  (see Flip)     (e.g. OV)
 +  %/+       Popup Menu of Commands
-+
 +
 +
                   +Press%Enter+to continue with the Tutorial
@@ -4265,8 +4293,8 @@ $t2      +Index Refresh:@cbtinfo
  ]about+     ]flip+      ]new+       ]search+
  ]current+   ]history+   ]only+      ]set+
  ]ds+        ]info+      ]overflow+  ]sort+
- ]esearch+   ]local+     ]rebuild+   ]update+
- ]find+      ]locate+    ]refresh+
+ ]esearch+   ]local+     ]rebuild+   ]tbd+
+ ]find+      ]locate+    ]refresh+   ]update+
 
              +Or%F3+to cancel.
 )Init
@@ -4290,6 +4318,7 @@ $t2      +Index Refresh:@cbtinfo
  &Refresh  = 'Refresh'
  &Search   = 'Search '
  &Set      = 'Set '
+ &tbd      = 'TBD    '
  &UPdate   = 'UPDate '
  &current  = 'CUrrent'
  &overflow = 'OVerflow'
@@ -4341,6 +4370,7 @@ if zcmd = ''
  FIELD(Search   ) VAR(zcmd) VAL('SEARCH  ')
  FIELD(LOCAL    ) VAR(zcmd) VAL('LOCAL   ')
  FIELD(SORT     ) VAR(zcmd) VAL('SORT    ')
+ FIELD(TBD      ) VAR(zcmd) VAL('TBD     ')
  FIELD(UPDate   ) VAR(zcmd) VAL('UPDATE  ')
  FIELD(CURrent  ) VAR(zcmd) VAL('CURRENT ')
  FIELD(OVERFLOW ) VAR(zcmd) VAL('OVERFLOW')
