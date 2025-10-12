@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.10'
+  ver = '2.11'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,11 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-10-12 LBD 2.11                                  |
+  |                   - improve updated file count and flag   |
+  |                   - add debug command to turn on          |
+  |                     rexx interactive tracing              |
   |                                                           |
   |      2025-10-10 LBD 2.10                                  |
   |                   - add TBD command to show files not     |
@@ -626,8 +631,19 @@ Do_Index:
 
   update_count = 0
 
+  /* --------------------------------------------------- *
+   | Setup stem to bypass duplicates from the index file |
+   | caused by the build process being used - only honor |
+   | the 1st occurance of a file.                        |
+   * --------------------------------------------------- */
+  drop didx.
+  didx. = null
+
   do i = 1 to idx.0
     parse value idx.i with file desc 69 fdate vuflag
+    if didx.file /= null
+       then iterate
+       else didx.file = 'x'
     desc = strip(desc)
     if special /= 1 then
     if desc = 'EMPTY' then iterate
@@ -697,6 +713,9 @@ Do_Index:
       else online = '*'
       if special /= 1 then
       if desc = 'EMPTY' then iterate
+      if fupflg = '+' then do
+         update_count = update_count + 1
+         end
       'tbadd' cbtdd
     end
   end
@@ -827,6 +846,10 @@ Do_Index:
     end
     csels = ztdsels
     zopt  = null
+    if abbrev('DEBUG',translate(word(zcmd,1)),2) = 1 then do
+         trace '?i'
+         zcmd = null
+         end
     If zcmd /= null then call do_zcmd
     If csel /= null then do
       'control display save'
