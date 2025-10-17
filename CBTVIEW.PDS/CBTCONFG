@@ -56,6 +56,6 @@ backup = 0
 *
 * access = O Work offline
 *        = C Use curl if avaiable otherwise FTP
-*        = F Use FTP
+*        = F Use FTP (default)
 *
-access = C
+access = F

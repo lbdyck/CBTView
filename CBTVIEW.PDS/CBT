@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.11'
+  ver = '2.12'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,13 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-10-17 LBD 2.12                                  |
+  |                   - restructure a bit                     |
+  |                     remove two procedures as not needed   |
+  |                   - set ftp as default access method      |
+  |                   - change debug to 1 for bpxwunix report |
+  |                     and 2 for rexx trace (debug 1 or 2)   |
   |                                                           |
   |      2025-10-12 LBD 2.11                                  |
   |                   - improve updated file count and flag   |
@@ -388,7 +395,7 @@
     load_info update_files updates. unzip_ok ftpstat dsn sort_toggle ,
     special cbtver ispfact file043_update save_update access startup ,
     rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok ,
-    zerrsm
+    zerrsm debug
 
   arg option '\' newhlq
   if option \= ' ' then
@@ -439,9 +446,9 @@
   |                                                      |
   | access = O Work offline                              |
   |        = C Use curl if avaiable otherwise FTP        |
-  |        = F Use FTP                                   |
+  |        = F Use FTP (default)                         |
   * ---------------------------------------------------- */
-  access  = 'C'
+  access  = 'F'    /* FTP is the default access method */
   action  = 'I'
   backup  = '0'
   sysout  = 'Z'
@@ -847,8 +854,14 @@ Do_Index:
     csels = ztdsels
     zopt  = null
     if abbrev('DEBUG',translate(word(zcmd,1)),2) = 1 then do
-         trace '?i'
-         zcmd = null
+         if word(zcmd,2) = 1 then do
+            zcmd = null
+            debug = 1
+            end
+         if word(zcmd,2) = 2 then do
+            trace '?i'
+            zcmd = null
+            end
          end
     If zcmd /= null then call do_zcmd
     If csel /= null then do
@@ -884,8 +897,11 @@ Done:
   | Bypass if FILE001 has been updated or a REBuild during this    |
   | session.                                                       |
   * -------------------------------------------------------------- */
+/* Comment Start
 Get_CBT_File_Info: Procedure expose cbthlq file_pfx inp. null idx. ,
-                   rebuild_cbt rebuild_cov update_cbt update_cov
+                   rebuild_cbt rebuild_cov update_cbt update_cov debug
+   Comment End */
+Get_CBT_File_Info:
   cbt_file001 = cbthlq"."file_pfx"001.DATA"
   if file_pfx = 'COV'
      then if rebuild_cov = 1 then return 0
@@ -1925,10 +1941,13 @@ FTP_DSN:
   /* ---------------------------------------------------- *
   | Perform the FTP to get the file from www.cbttape.org |
   * ---------------------------------------------------- */
+/* Comment Start
 FTP_From_CBT: Procedure expose cbthlq sysout dsn null ftptype load_info ,
     zerrhm zerralrm zerrtp update volser renamec unzip_ok file_pfx idxmem ,
-    zip_pfx fupflg fdate update_files workunit cbtidx smsinfo idx. ,
+    zip_pfx fupflg fdate update_files workunit cbtidx smsinfo idx. debug ,
     rebuild_cbt rebuild_cov update_cbt update_cov download curl_ok env.
+   Comment End */
+FTP_From_CBT:
 
   arg file
 
@@ -2153,10 +2172,11 @@ Del_Rename: procedure expose renamec backup
   | Process the OMVS command |
   * ------------------------ */
 Do_Command:
-  parse arg cmd
+  parse arg ocmd
   if datatype(env.0) /= 'NUM' then call get_env
   drop g. e.
-  x = bpxwunix(cmd,,g.,e.,env.)
+  x = bpxwunix(ocmd,,g.,e.,env.)
+  if debug = 1 then call view_std
   return x
 
 Get_Env:
@@ -2175,6 +2195,81 @@ Get_Env:
      end
   env.0 = ec
   drop e. genv. tenv.
+  return
+
+  /* ---------------------------------------------------------- *
+  | Generalized routine to view stdout. (g.) or stderr. (e.) |
+  | based on the parm passed                                   |
+  * ---------------------------------------------------------- */
+view_std:
+  Address ISPExec
+  'Control Display Save'
+  /* ------------------------------- *
+  | Randomly define a DDName to use |
+  * ------------------------------- */
+  dd = 'dd'random(9999)
+  /* --------------------------------------- *
+  | Get lrecl to determine dcb for temp d/s |
+  * --------------------------------------- */
+  vlrecl = 80
+  do li  = 1 to g.0
+    g.li = strip(g.li)
+    if length(g.li) > vlrecl then vlrecl = length(g.li)
+    if g.li = null then g.li = ' '
+  end
+  do li  = 1 to e.0
+    e.li = strip(e.li)
+    if length(e.li) > vlrecl then vlrecl = length(e.li)
+    if e.li = null then e.li = ' '
+  end
+  sec = g.0 + e.0
+  if length(ocmd) > vlrecl
+  then vlrecl = length(ocmd)
+  if vlrecl < 81 then vlrecl = 80
+  else vlrecl = vlrecl + 4
+  if vlrecl = 80 then vrecfm = 'f b'
+  else vrecfm = 'v b'
+  /* ------------------------------------------ *
+  | Allocate a temporary data set for our data |
+  * ------------------------------------------ */
+  Address TSO
+  'Alloc f('dd') new spa(5,5) tr' ,
+    'recfm('vrecfm') lrecl('vlrecl') blksize(0)'
+  sc = g.0
+  do xi = 1 to e.0
+    sc = sc + 1
+    g.sc = e.xi
+  end
+  g.0 = sc
+  drop e.
+  /* ----------------------- *
+  | Write out the stem data |
+  * ----------------------- */
+  sc.1 = 'Command:' ocmd
+  sc.2 = copies('-',80)
+  sc.3 = ' '
+  sc.0 = 3
+  'Execio * diskw' dd '(stem sc.'
+  'Execio * diskw' dd '(finis stem g.'
+  drop g.
+  /* -------------------------------------------------- *
+  | Access the Temporary Data Set using ISPF           |
+  | Library Services.                                  |
+  | Then using ISPF View service to browse the data.   |
+  | And use Library Services to Free the Data Set.     |
+  * -------------------------------------------------- */
+  Address ISPExec
+  if sec > 0 then do
+    'lminit dataid(ddb) ddname('dd')'
+    'view   dataid('ddb')'
+    'lmfree dataid('ddb')'
+  end
+  /* ----------------------------- *
+  | Last Free the z/OS Allocation |
+  * ----------------------------- */
+  'Control Display Restore'
+  Address TSO
+  'Free f('dd')'
   return
 
   /* ----------------------------------------- *
