@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.12'
+  ver = '2.13'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,9 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-10-18 LBD 2.13                                  |
+  |                   - fix yet another curl issue            |
   |                                                           |
   |      2025-10-17 LBD 2.12                                  |
   |                   - restructure a bit                     |
@@ -2005,7 +2008,7 @@ FTP_From_CBT:
   if curl_ok = 0
      then cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file ,
                 '&& unzip -o' get_file '&& ls -la' get_file
-     else cmd = 'cd /tmp/ && unzip -o' get_file
+     else cmd = 'cd /tmp/ && unzip -o' get_file '&& ls -la' get_file
   x = do_command(cmd)
 
   archive = null
@@ -2249,6 +2252,7 @@ view_std:
   sc.2 = copies('-',80)
   sc.3 = ' '
   sc.0 = 3
+  sec = sec + sc.0
   'Execio * diskw' dd '(stem sc.'
   'Execio * diskw' dd '(finis stem g.'
   drop g.
@@ -2336,8 +2340,8 @@ Setup_FTP_File:
       fileudir = 'updatcov'
     end
     curlcmd = 'cd /tmp/ &&' ,
-              'curl -s -O' ,
-       'https://cbttape.org/ftp/'filefdir'/'filepref''file'.zip'
+              'curl -O' ,
+              'https://cbttape.org/ftp/'filefdir'/'filepref''file'.zip'
     x = do_command(curlcmd)
   end
   else do
