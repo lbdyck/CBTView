@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.13'
+  ver = '2.14'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,10 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2025-11-01 LBD 2.14                                  |
+  |                   - Update copy to always copy a PDS to   |
+  |                     a PDSE                                |
   |                                                           |
   |      2025-10-18 LBD 2.13                                  |
   |                   - fix yet another curl issue            |
@@ -2850,10 +2854,10 @@ Do_Copy:
     return
   end
   Address TSO
-  'alloc ds('newdsn') new like('dsn')'
-  'free  ds('newdsn')'
   x = listdsi(dsn)
   if sysdsorg = 'PO' then do
+   'alloc ds('newdsn') new like('dsn') dsntype(library,2)'
+   'free  ds('newdsn')'
     Address ISPexec
     "lminit dataid(indd1) dataset("dsn")"
     "lminit dataid(outdd1) dataset("newdsn")"
@@ -2863,6 +2867,8 @@ Do_Copy:
     "lmfree dataid("outdd1")"
   end
   else do
+    'alloc ds('newdsn') new like('dsn')'
+    'free  ds('newdsn')'
     'smcopy fromdataset('dsn') todataset('newdsn')'
   end
   Address ISPExec
