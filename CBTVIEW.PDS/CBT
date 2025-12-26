@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.14'
+  ver = '2.16'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -36,6 +36,13 @@
   * --------------------------------------------------------- *
   | History:                                                  |
   |                                                           |
+  |      2025-12-13 LBD 2.16                                  |
+  |                   - Correction to use unzip from /tmp/    |
+  |                     unless unzip is already in the path   |
+  |                                                           |
+  |      2025-12-08 LBD 2.15                                  |
+  |                   - Add debug 3 for off                   |
+  |                                                           |
   |      2025-11-01 LBD 2.14                                  |
   |                   - Update copy to always copy a PDS to   |
   |                     a PDSE                                |
@@ -49,6 +56,7 @@
   |                   - set ftp as default access method      |
   |                   - change debug to 1 for bpxwunix report |
   |                     and 2 for rexx trace (debug 1 or 2)   |
+  |                     or 3 to turn off debug.               |
   |                                                           |
   |      2025-10-12 LBD 2.11                                  |
   |                   - improve updated file count and flag   |
@@ -867,6 +875,11 @@ Do_Index:
             end
          if word(zcmd,2) = 2 then do
             trace '?i'
+            zcmd = null
+            end
+         if word(zcmd,2) = 3 then do
+            trace 'off'
+            debug = null
             zcmd = null
             end
          end
@@ -1961,8 +1974,19 @@ FTP_From_CBT:
   if update = 0 then return 4
   if unzip_ok = 0 then return 4
 
-  unzip_dsn = "//'"cbtidx"(UNZIP)'"
+  /* ------------------------------ *
+   | Check for unzip in active path |
+   * ------------------------------ */
+   cmd = 'command -v unzip'
+   x = do_command(cmd)
+   if g.0 = 1 then do
+      unzip_ok = 2
+      end
+
   cbt_hlq   = cbthlq
+
+  if unzip_ok /= 2 then do
+  unzip_dsn = "//'"cbtidx"(UNZIP)'"
 
   cmd_file ='/tmp/'sysvar('sysuid')'.ftp'
   zipfile = '/tmp/unzip'
@@ -1990,6 +2014,7 @@ FTP_From_CBT:
       'setmsg msg(isrz003)'
       return 4
     end
+    end
   end
 
   get_file = zip_pfx''file'.zip'
@@ -2013,6 +2038,7 @@ FTP_From_CBT:
      then cmd = 'cd /tmp/ && ftp www.cbttape.org <' cmd_file ,
                 '&& unzip -o' get_file '&& ls -la' get_file
      else cmd = 'cd /tmp/ && unzip -o' get_file '&& ls -la' get_file
+
   x = do_command(cmd)
 
   archive = null
@@ -2182,7 +2208,13 @@ Do_Command:
   parse arg ocmd
   if datatype(env.0) /= 'NUM' then call get_env
   drop g. e.
-  x = bpxwunix(ocmd,,g.,e.,env.)
+  if pos('unzip',ocmd) = 0
+     then x = bpxwunix(ocmd,,g.,e.,env.)
+     else do
+          if unzip_ok = 2 && pos('command',ocmd) > 0
+             then x = bpxwunix(ocmd,,g.,e.,env.)
+             else x = bpxwunix(ocmd,,g.,e.,unzip_env.)
+          end
   if debug = 1 then call view_std
   return x
 
@@ -2202,6 +2234,10 @@ Get_Env:
      end
   env.0 = ec
   drop e. genv. tenv.
+  unzip_env.1 = 'HOME='home
+  unzip_env.2 = '_BPX_SHAREAS=YES'
+  unzip_env.3 = 'PATH=/tmp/:/bin'
+  unzip_env.0 = 3
   return
 
   /* ---------------------------------------------------------- *
@@ -2753,6 +2789,7 @@ Do_Update:
   * ------------------------------------------- */
 Update_Index:
   arg UI_Opt
+
   idc = 0
   drop ido.
   do ui = 1 to idx.0

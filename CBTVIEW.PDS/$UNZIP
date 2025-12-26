@@ -1,0 +1,9 @@
+The unzip utility that is used by CBTView during execution will be one
+found in the active PATH, and if not found then a unzip utility will be
+copied from the UNZIP member of the FILEIDX.PDS into /tmp with a
+temporary change to the PATH for that invocation.
+
+The unzip that is included is found in the UNZIPXMI member as a TSO
+Transmit (XMIT) format with an imbedded PAX of the unzip executable.
+This executable is from the zopen project. The license for it is found
+in member UNZIPL.
