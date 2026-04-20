@@ -1,5 +1,5 @@
   /* ---------------------- REXX ----------------------------- */
-  ver = '2.16'
+  ver = '2.17'
   /*Name:  CBT                                                |
   |                                                           |
   | Purpose: Open the requested CBT File using the requested  |
@@ -35,6 +35,10 @@
   |         used and ftp will be                              |
   * --------------------------------------------------------- *
   | History:                                                  |
+  |                                                           |
+  |      2026-04-20 LBD 2.17                                  |
+  |                   - Adjust file DCB for files 18, 110,    |
+  |                     157, 230, and 932 (All .DATA)         |
   |                                                           |
   |      2025-12-13 LBD 2.16                                  |
   |                   - Correction to use unzip from /tmp/    |
@@ -2089,10 +2093,29 @@ FTP_From_CBT:
     if volser /= null
     then cbtvol = 'volume('volser')'
     else cbtvol = null
+
+   from_dir = '/tmp/'archive
+   ogrecfm = 'f b'
+   oglrecl = 80
+   ogblk = 27920
+   if translate(right(archive,5)) = '.DATA' then do
+      parse value archive with 'FILE'tf'.DATA'
+      if pos(tf,'018 110 157 230') > 0 then do
+         ogrecfm = 'f b a'
+         oglrecl = 133
+         ogblk = 32718
+         end
+      if pos(tf,'932') > 0 then do
+         ogrecfm = 'f b'
+         oglrecl = 35
+         ogblk = 32760
+         end
+      end
+
   'alloc ds('zos') new spa('space','space') tr dsorg(ps)' ,
-    'recfm(f b) lrecl(80) blksize(27920)' wrkunit cbtvol 'release'
+    'recfm('ogrecfm') lrecl('oglrecl') blksize('ogblk')' ,
+    wrkunit cbtvol 'release'
   'free ds('zos')'
-  from_dir = '/tmp/'archive
   'oget' "'"from_dir"'" zos 'Binary'
 
   if translate(right(archive,4)) = '.XMI' then do

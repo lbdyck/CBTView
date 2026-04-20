@@ -51,11 +51,11 @@
 * backup = 0 Do NOT create backup files when a file is updated
 *        = 1 Create .Dyymmdd backup files when a file is updated
 *
-backup = 0
+*backup = 0
 *
 *
 * access = O Work offline
 *        = C Use curl if avaiable otherwise FTP
 *        = F Use FTP (default)
 *
-access = F
+*access = F
